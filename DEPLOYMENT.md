@@ -9,21 +9,24 @@ database, and no API at runtime.
 `.github/workflows/deploy.yml` handles everything:
 
 1. In repo Settings → Pages, set **Source: GitHub Actions**.
-2. Add `PUBLIC_MAPBOX_TOKEN` under Settings → Secrets and variables → Actions.
-   Either tab works — the build reads both. It must be **repository**-scoped:
-   an *environment* secret reaches only jobs that declare that environment,
-   and the build job joins none by design (it runs third-party code, so it
-   stays least-privileged — see the `permissions` notes in `deploy.yml`).
+2. Add `PUBLIC_MAPBOX_TOKEN` under Settings → Secrets and variables → Actions
+   → **Variables**, scoped to the **repository**.
 
-   A secret and a variable are equally correct here. The token is public
-   either way: it's compiled into the bundle and served to every visitor, so
-   a secret hides it from the Actions logs but not from View Source. What
-   actually protects it is the URL restriction below.
+   A variable rather than a secret because the token is public either way —
+   it's compiled into the bundle and served to every visitor, so a secret
+   would hide it from the Actions logs but not from View Source. The URL
+   restriction below is what actually protects it.
+
+   Repository- rather than environment-scoped because an environment variable
+   reaches only jobs that declare that environment, and the build job joins
+   none by design: it runs third-party code, so it stays least-privileged
+   (see the `permissions` notes in `deploy.yml`). Granting it the pages
+   environment just to read a token would undo that.
 
    Without a token the site still builds and lists every swim — it just can't
-   show walk/bike/transit times or a top pick. The build warns when this
-   happens rather than failing, so check the run summary if travel times are
-   missing.
+   show walk/bike/transit times or a top pick. The build warns rather than
+   failing, and each run's summary records `Travel times: on` or `off`, so
+   check there first if travel times go missing.
 3. Merge to `main`. Pushes deploy immediately; a daily cron checks the city's
    CKAN stamp against the deployed `stamp.txt` and rebuilds only when the city
    publishes new data (~weekly) — the site never contacts the city at runtime.
