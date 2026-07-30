@@ -13,11 +13,16 @@ export function chunkPools(pools, size = MAX_DESTINATIONS) {
 }
 
 export function matrixUrl(profile, origin, pools, token) {
+	// Coordinates are a path segment in Mapbox's own `lng,lat;lng,lat` format,
+	// so they stay literal; everything user- or config-supplied goes through
+	// URLSearchParams.
 	const coords = [origin, ...pools].map((p) => `${p.lng},${p.lat}`).join(';');
-	return (
-		`https://api.mapbox.com/directions-matrix/v1/mapbox/${profile}/${coords}` +
-		`?sources=0&annotations=duration&access_token=${token}`
-	);
+	const query = new URLSearchParams({
+		sources: '0',
+		annotations: 'duration',
+		access_token: token
+	});
+	return `https://api.mapbox.com/directions-matrix/v1/mapbox/${profile}/${coords}?${query}`;
 }
 
 async function profileDurations(profile, origin, pools, token, fetchImpl) {
@@ -27,7 +32,10 @@ async function profileDurations(profile, origin, pools, token, fetchImpl) {
 		if (!res.ok) throw new Error(`Mapbox ${profile} matrix -> ${res.status}`);
 		const body = await res.json();
 		if (body.code !== 'Ok') throw new Error(`Mapbox ${profile} matrix -> ${body.code}`);
-		const durations = body.durations[0]; // from origin; index 0 is origin itself
+		const durations = body.durations?.[0]; // from origin; index 0 is origin itself
+		if (!Array.isArray(durations)) {
+			throw new Error(`Mapbox ${profile} matrix -> missing durations in response`);
+		}
 		chunk.forEach((pool, i) => {
 			const sec = durations[i + 1];
 			out.set(pool.id, sec == null ? null : Math.round(sec / 60));
