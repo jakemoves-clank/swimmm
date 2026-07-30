@@ -30,7 +30,8 @@ export default defineConfig({
 		timeout: 180_000,
 		env: {
 			DB_PATH: 'tests/e2e/.tmp/e2e.db',
-			SKIP_REFRESH: '1'
+			SKIP_REFRESH: '1',
+			PUBLIC_MAPBOX_TOKEN: 'pk.e2e-test-token'
 		}
 	}
 });
