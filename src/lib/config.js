@@ -14,7 +14,10 @@ export const DEFAULT_MIN_SWIM_MIN = 30;
 export const LOCATION_GRID_DEG = 0.0005;
 
 export function snapToGrid(coords, grid = LOCATION_GRID_DEG) {
-	const snap = (v) => Number((Math.round(v / grid) * grid).toFixed(4));
+	// Trim binary-float noise (43.653000000000006) at the grid's own
+	// precision, so a finer grid still lands on its own steps.
+	const decimals = Math.max(0, Math.ceil(-Math.log10(grid)) + 1);
+	const snap = (v) => Number((Math.round(v / grid) * grid).toFixed(decimals));
 	return { lat: snap(coords.lat), lng: snap(coords.lng) };
 }
 
