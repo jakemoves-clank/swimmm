@@ -3,11 +3,8 @@
 // config.js TOP_RESULT. Returns { session, mode, minutes } or null (desert).
 
 // Mapbox has no transit routing, so transit comes from a pluggable provider:
-// getTransit(location_id) -> { minutes, connections } | null. Swap in a real
-// source (e.g. OpenTripPlanner over TTC GTFS) without touching the cascade.
-export function transitUnavailable() {
-	return null;
-}
+// getTransit(location_id) -> { minutes, connections } | null. The live
+// implementation is src/lib/transit.js (Transitous over official GTFS).
 
 function tierCandidates(sessions, mode, maxMin, { nowMin, minSwim, config, getTransit }) {
 	const out = [];

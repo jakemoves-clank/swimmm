@@ -2,7 +2,8 @@
 	import { onMount } from 'svelte';
 	import { env } from '$env/dynamic/public';
 	import { fetchTravelTimes, isReachable } from '$lib/travel.js';
-	import { pickTopResult, transitUnavailable } from '$lib/topResult.js';
+	import { pickTopResult } from '$lib/topResult.js';
+	import { fetchTransitTimes } from '$lib/transit.js';
 	import { maxTravelMin, minSwimMin, TOP_RESULT } from '$lib/config.js';
 
 	let loading = $state(true);
@@ -114,16 +115,42 @@
 
 	// Top pick (and its desert fallback) only exist once travel times are in —
 	// without them we can't honestly claim anything is "within a 15-min walk".
-	const topPick = $derived(
-		travel && payload
-			? pickTopResult(sessions, {
-					nowMin: payload.now_min,
-					minSwim: limits.minSwim,
-					config: TOP_RESULT,
-					getTransit: transitUnavailable
-				})
-			: null
-	);
+	let transitTimes = $state(null); // Map<location_id, {minutes, connections}>
+	let transitTried = false;
+
+	const pickOpts = $derived({
+		nowMin: payload?.now_min,
+		minSwim: limits.minSwim,
+		config: TOP_RESULT,
+		getTransit: (id) => transitTimes?.get(id) ?? null
+	});
+
+	const topPick = $derived(travel && payload ? pickTopResult(sessions, pickOpts) : null);
+
+	// Transit is the last tier and costs one Transitous request per pool, so
+	// only look it up when walking and biking both fail to produce a pick.
+	$effect(() => {
+		if (!travel || !payload || !coords || transitTried) return;
+		if (pickTopResult(sessions, { ...pickOpts, getTransit: () => null })) return;
+		transitTried = true;
+		const candidates = new Map();
+		for (const s of sessions) {
+			if (
+				s.lat != null &&
+				s.start_min - payload.now_min <= TOP_RESULT.WINDOW_MIN &&
+				!candidates.has(s.location_id)
+			) {
+				candidates.set(s.location_id, { id: s.location_id, lat: s.lat, lng: s.lng });
+			}
+		}
+		if (!candidates.size) return;
+		fetchTransitTimes(coords, [...candidates.values()], {
+			maxConnections: TOP_RESULT.TRANSIT_MAX_CONNECTIONS
+		}).then(
+			(map) => (transitTimes = map),
+			(e) => console.warn('transit times unavailable:', e.message)
+		);
+	});
 
 	const DESERT = String.raw`
         \ | /
