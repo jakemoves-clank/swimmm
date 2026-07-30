@@ -9,66 +9,97 @@ on:
     - cron: '23 10 * * *'
   workflow_dispatch:
 
-permissions:
-  contents: read
-  pages: write
-  id-token: write
+# Deny by default; each job opts into only what it needs. In particular the
+# build job — the only one that runs third-party code (npm deps, the SvelteKit
+# build) — never holds pages:write or id-token:write.
+permissions: {}
 
 concurrency:
   group: pages
-  cancel-in-progress: true
+  # Never cancel a deployment midway through publishing.
+  cancel-in-progress: false
 
 jobs:
-  deploy:
+  gate:
+    name: Check whether the city published new data
     runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+    timeout-minutes: 5
+    permissions: {}
+    outputs:
+      changed: ${{ steps.check.outputs.changed }}
     steps:
-      - name: Skip scheduled rebuild if city data is unchanged
-        id: gate
+      - id: check
         env:
           EVENT: ${{ github.event_name }}
           SITE: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}
         run: |
+          set -euo pipefail
+          # Only scheduled runs are gated; pushes and manual runs always build.
           if [ "$EVENT" != "schedule" ]; then
             echo "changed=true" >> "$GITHUB_OUTPUT"; exit 0
           fi
           CKAN=https://ckan0.cf.opendata.inter.prod-toronto.ca/api/3/action/package_show
-          P=$(curl -sf "$CKAN?id=registered-programs-and-drop-in-courses-offering" | jq -r .result.last_refreshed)
-          F=$(curl -sf "$CKAN?id=parks-and-recreation-facilities" | jq -r .result.last_refreshed)
-          LIVE=$(curl -sf "$SITE/stamp.txt" || echo "none")
-          echo "city: $P|$F"; echo "live: $LIVE"
+          P=$(curl -sf --max-time 30 "$CKAN?id=registered-programs-and-drop-in-courses-offering" | jq -r .result.last_refreshed)
+          F=$(curl -sf --max-time 30 "$CKAN?id=parks-and-recreation-facilities" | jq -r .result.last_refreshed)
+          LIVE=$(curl -sf --max-time 30 "$SITE/stamp.txt" || echo "none")
+          echo "city: $P|$F"
+          echo "live: $LIVE"
           if [ "$LIVE" = "$P|$F" ]; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
           else
             echo "changed=true" >> "$GITHUB_OUTPUT"
           fi
 
+  build:
+    name: Build static site
+    needs: gate
+    if: needs.gate.outputs.changed == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
       - uses: actions/checkout@v4
-        if: steps.gate.outputs.changed == 'true'
+        with:
+          # Don't leave the job's token in .git/config where build scripts
+          # could read it. Nothing here pushes.
+          persist-credentials: false
 
       - uses: actions/setup-node@v4
-        if: steps.gate.outputs.changed == 'true'
         with:
           node-version: 22
           cache: npm
 
+      # --ignore-scripts blocks dependency lifecycle scripts, the usual
+      # foothold for a compromised package. Verified: the build doesn't
+      # need them.
+      - run: npm ci --ignore-scripts
+
       - name: Build (fetches city data once)
-        if: steps.gate.outputs.changed == 'true'
         env:
           BASE_PATH: /${{ github.event.repository.name }}
           PUBLIC_MAPBOX_TOKEN: ${{ vars.PUBLIC_MAPBOX_TOKEN }}
         run: |
-          npm ci
           npm run build
           cp .city-cache/stamp.txt build/stamp.txt
 
       - uses: actions/upload-pages-artifact@v3
-        if: steps.gate.outputs.changed == 'true'
         with:
           path: build
 
-      - uses: actions/deploy-pages@v4
-        if: steps.gate.outputs.changed == 'true'
-        id: deployment
+  deploy:
+    name: Publish to Pages
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # Only this job can publish or mint an OIDC token, and it runs no
+    # project code — just the deploy action against the built artifact.
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
