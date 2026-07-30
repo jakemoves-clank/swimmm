@@ -42,14 +42,17 @@ export async function maybeRefresh(db, { fetchImpl = fetch, now = Date.now } = {
 		getJson(fetchImpl, URLS.programsMeta),
 		getJson(fetchImpl, URLS.facilitiesMeta)
 	]);
-	setMeta(db, 'last_metadata_check', String(now()));
-
+	// Only update last_metadata_check once we know the refresh attempt completed (or data is unchanged),
+	// so transient download/DB failures don't delay retries for CHECK_INTERVAL_MS.
 	const programsStamp = String(programsMeta.result.last_refreshed);
 	const facilitiesStamp = String(facilitiesMeta.result.last_refreshed);
 	const unchanged =
 		getMeta(db, 'programs_last_refreshed') === programsStamp &&
 		getMeta(db, 'facilities_last_refreshed') === facilitiesStamp;
-	if (unchanged) return { checked: true, downloaded: false };
+	if (unchanged) {
+		setMeta(db, 'last_metadata_check', String(now()));
+		return { checked: true, downloaded: false };
+	}
 
 	const [dropinRows, locationRows, geojson] = await Promise.all([
 		getJson(fetchImpl, URLS.dropin),
@@ -63,5 +66,6 @@ export async function maybeRefresh(db, { fetchImpl = fetch, now = Date.now } = {
 	setMeta(db, 'programs_last_refreshed', programsStamp);
 	setMeta(db, 'facilities_last_refreshed', facilitiesStamp);
 	setMeta(db, 'data_loaded_at', new Date(now()).toISOString());
+	setMeta(db, 'last_metadata_check', String(now()));
 	return { checked: true, downloaded: true, sessions: sessions.length };
 }
