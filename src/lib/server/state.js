@@ -8,7 +8,9 @@ import { maybeRefresh } from './refresh.js';
 // Honours HTTP(S)_PROXY / NO_PROXY env vars (no-op when unset), which Node's
 // global fetch ignores. Needed wherever egress goes through a proxy.
 const proxyDispatcher = new EnvHttpProxyAgent();
-const fetchImpl = (url) => undiciFetch(url, { dispatcher: proxyDispatcher });
+// Forward the caller's init (notably the abort signal) or the refresher's
+// timeout would never reach undici.
+const fetchImpl = (url, init) => undiciFetch(url, { ...init, dispatcher: proxyDispatcher });
 
 // Every 6h we *consider* a refresh; maybeRefresh itself only hits the city's
 // lightweight metadata endpoint at most ~once a day, and downloads data files

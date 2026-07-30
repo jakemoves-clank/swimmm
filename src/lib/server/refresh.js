@@ -28,8 +28,12 @@ const MAX_RESPONSE_BYTES = 100 * 1024 * 1024;
 async function getJson(fetchImpl, url) {
 	const res = await fetchImpl(url, { signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) });
 	if (!res.ok) throw new Error(`GET ${url} -> ${res.status}`);
+	// Cheap early-out only: a response without a trustworthy content-length
+	// isn't checked here. The abort timeout above is the real backstop.
 	const length = Number(res.headers?.get?.('content-length'));
-	if (length > MAX_RESPONSE_BYTES) throw new Error(`GET ${url} -> ${length} bytes exceeds cap`);
+	if (Number.isFinite(length) && length > MAX_RESPONSE_BYTES) {
+		throw new Error(`GET ${url} -> ${length} bytes exceeds cap`);
+	}
 	return res.json();
 }
 

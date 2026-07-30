@@ -13,6 +13,13 @@ describe('snapToGrid', () => {
 		expect(snapToGrid({ lat: 43.66, lng: -79.4 })).toEqual({ lat: 43.66, lng: -79.4 });
 	});
 
+	it('honours a finer grid instead of rounding back to a fixed precision', () => {
+		expect(snapToGrid({ lat: 43.653226, lng: -79.383184 }, 0.00005)).toEqual({
+			lat: 43.65325,
+			lng: -79.38320
+		});
+	});
+
 	it('grid size is ~50 m (0.0005° of latitude ≈ 55 m)', () => {
 		expect(LOCATION_GRID_DEG * 111_320).toBeLessThan(60);
 		expect(LOCATION_GRID_DEG * 111_320).toBeGreaterThan(40);
