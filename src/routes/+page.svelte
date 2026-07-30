@@ -1,21 +1,47 @@
 <script>
 	import { onMount } from 'svelte';
-	import { env } from '$env/dynamic/public';
+	import { torontoNow } from '$lib/time.js';
 	import { fetchTravelTimes, isReachable } from '$lib/travel.js';
 	import { pickTopResult } from '$lib/topResult.js';
 	import { fetchTransitTimes } from '$lib/transit.js';
 	import { maxTravelMin, minSwimMin, snapToGrid, TOP_RESULT, CITY_LANE_SWIM_URL } from '$lib/config.js';
 
-	let loading = $state(true);
-	let error = $state(null);
-	let payload = $state(null);
+	let { data } = $props();
+
+	let now = $state(null); // set client-side; the prerendered shell shows "Loading"
 	let coords = $state(null); // { lat, lng } — lives only in this browser tab
 	let geoDenied = $state(false);
 	let sortBy = $state('soonest');
 	let travel = $state(null); // Map<location_id, {walk, bike}> once Mapbox responds
 	let limits = $state({ maxTravel: 60, minSwim: 30 });
 
-	const mapboxToken = env.PUBLIC_MAPBOX_TOKEN;
+	const mapboxToken = data.mapboxToken;
+
+	// Today's remaining sessions, joined to their pools, from the schedule
+	// baked in at build time.
+	const payload = $derived.by(() => {
+		if (!now) return null;
+		const pools = new Map(data.schedule.locations.map((l) => [l.id, l]));
+		const sessions = data.schedule.sessions
+			.filter((s) => s.date === now.date && s.end_min > now.minutes)
+			.map((s) => {
+				const pool = pools.get(s.location_id);
+				return {
+					...s,
+					pool: pool?.name ?? 'Unknown pool',
+					address: pool?.address ?? '',
+					lat: pool?.lat ?? null,
+					lng: pool?.lng ?? null
+				};
+			})
+			.sort((a, b) => a.start_min - b.start_min);
+		return {
+			date: now.date,
+			now_min: now.minutes,
+			data_from: data.schedule.programs_last_refreshed,
+			sessions
+		};
+	});
 
 	async function loadTravelTimes() {
 		if (!mapboxToken || !coords || !payload) return;
@@ -32,18 +58,10 @@
 		}
 	}
 
-	onMount(async () => {
+	onMount(() => {
 		const params = new URLSearchParams(location.search);
 		limits = { maxTravel: maxTravelMin(params), minSwim: minSwimMin(params) };
-		try {
-			const res = await fetch('/api/today');
-			if (!res.ok) throw new Error(`API error ${res.status}`);
-			payload = await res.json();
-		} catch (e) {
-			error = e.message;
-		} finally {
-			loading = false;
-		}
+		now = torontoNow();
 		if (navigator.geolocation) {
 			navigator.geolocation.getCurrentPosition(
 				(pos) => {
@@ -174,13 +192,8 @@ _.-~'           '-._|||___|||_.-~'-._`;
 		<p class="tagline">Adult lane swim at City of Toronto pools — today</p>
 	</header>
 
-	{#if loading}
+	{#if !payload}
 		<p class="status">Loading today's swims…</p>
-	{:else if error}
-		<p class="status">
-			Couldn't load swim times ({error}). Try again in a minute, or check the
-			<a href={CITY_LANE_SWIM_URL}>city's lane swim schedules</a> directly.
-		</p>
 	{:else if sessions.length === 0}
 		<p class="status">
 			No more adult lane swims today. Check back tomorrow morning, or see the

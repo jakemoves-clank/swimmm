@@ -1,0 +1,74 @@
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  schedule:
+    # Daily, ~06:23 Toronto. The gate below skips the rebuild unless the
+    # city has actually published new data, so deploys happen ~weekly.
+    - cron: '23 10 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Skip scheduled rebuild if city data is unchanged
+        id: gate
+        env:
+          EVENT: ${{ github.event_name }}
+          SITE: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}
+        run: |
+          if [ "$EVENT" != "schedule" ]; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          CKAN=https://ckan0.cf.opendata.inter.prod-toronto.ca/api/3/action/package_show
+          P=$(curl -sf "$CKAN?id=registered-programs-and-drop-in-courses-offering" | jq -r .result.last_refreshed)
+          F=$(curl -sf "$CKAN?id=parks-and-recreation-facilities" | jq -r .result.last_refreshed)
+          LIVE=$(curl -sf "$SITE/stamp.txt" || echo "none")
+          echo "city: $P|$F"; echo "live: $LIVE"
+          if [ "$LIVE" = "$P|$F" ]; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/checkout@v4
+        if: steps.gate.outputs.changed == 'true'
+
+      - uses: actions/setup-node@v4
+        if: steps.gate.outputs.changed == 'true'
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Build (fetches city data once)
+        if: steps.gate.outputs.changed == 'true'
+        env:
+          BASE_PATH: /${{ github.event.repository.name }}
+          PUBLIC_MAPBOX_TOKEN: ${{ vars.PUBLIC_MAPBOX_TOKEN }}
+        run: |
+          npm ci
+          npm run build
+          cp .city-cache/stamp.txt build/stamp.txt
+
+      - uses: actions/upload-pages-artifact@v3
+        if: steps.gate.outputs.changed == 'true'
+        with:
+          path: build
+
+      - uses: actions/deploy-pages@v4
+        if: steps.gate.outputs.changed == 'true'
+        id: deployment

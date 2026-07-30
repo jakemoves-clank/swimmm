@@ -57,6 +57,15 @@ function firstPoint(geometry) {
 	return null;
 }
 
+// The whole publishable dataset in one shot: adult lane swim sessions plus
+// the locations they reference. This is what gets baked into the static site.
+export function buildSchedule(dropinRows, locationRows, geojson) {
+	const sessions = dropinRows.filter(isAdultLaneSwim).map(toSession);
+	const used = new Set(sessions.map((s) => s.location_id));
+	const locations = buildLocations(locationRows, geojson).filter((l) => used.has(l.id));
+	return { locations, sessions };
+}
+
 export function buildLocations(locationsJson, geojson) {
 	const byId = new Map();
 	const byAddress = new Map();

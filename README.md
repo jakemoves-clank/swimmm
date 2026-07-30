@@ -3,8 +3,9 @@
 One-screen mobile site answering: **which City of Toronto pools have adult lane
 swim today, and which are closest to me and soonest?**
 
-Proof of concept. SvelteKit (Svelte 5) + SQLite (better-sqlite3), no accounts,
-no map, grayscale UI with one accent color.
+Proof of concept. SvelteKit (Svelte 5), fully static — city data is fetched at
+build time and baked into the prerendered page (~30 KB gzipped). No accounts,
+no map, no runtime backend; grayscale UI with one accent color.
 
 ## Data — official City of Toronto only
 
@@ -13,10 +14,11 @@ no map, grayscale UI with one accent color.
 | Drop-in schedules + pool names/addresses | [Registered Programs and Drop In Courses Offering](https://open.toronto.ca/dataset/registered-programs-and-drop-in-courses-offering/) | Weekly |
 | Pool coordinates | [Parks and Recreation Facilities](https://open.toronto.ca/dataset/parks-and-recreation-facilities/) | Monthly |
 
-The server polls only the lightweight CKAN `package_show` metadata, at most
-about once a day, and downloads the actual data files **only when the city's
-`last_refreshed` stamp changes** — so downloads happen roughly weekly, matching
-the city's own schedule. Data lands in a local SQLite DB (`data/swimmm.db`).
+The site is rebuilt **only when the city's `last_refreshed` stamp changes**:
+a daily scheduled workflow compares the CKAN stamp against the deployed
+`stamp.txt` and skips the rebuild otherwise (see `.github/workflows/deploy.yml`
+and `DEPLOYMENT.md`). Local builds cache city downloads for ~20 h in
+`.city-cache/`; tests never contact the city (`SWIMMM_DATA_FILE`).
 
 Coordinates are joined by the shared Location ID, with a street-address
 fallback; one pool currently has no match in the city's geo data and is shown
@@ -36,9 +38,9 @@ least `DEFAULT_MIN_SWIM_MIN` (30) minutes left to swim. Both knobs live in
 write — and can be overridden per-visit with `?max=45&swim=20`.
 
 The browser calls Mapbox directly, so the user's location is shared with
-Mapbox (necessary to compute travel times) but still never reaches the Swimmm
-server. Without a token, or if Mapbox is unreachable, the page falls back to
-straight-line distances and hides nothing.
+Mapbox (necessary to compute travel times) — there is no Swimmm server for it
+to reach. Without a token, or if Mapbox is unreachable, the page falls back
+to straight-line distances and hides nothing.
 
 A **top pick** is surfaced above the list via the tier cascade in
 `config.js` `TOP_RESULT`: a swim starting within 2 hours that's ≤ 15 min on
@@ -48,31 +50,33 @@ connection. Transit times come from [Transitous](https://transitous.org)
 API over transit agencies' official GTFS feeds (the TTC's, for Toronto).
 It's only queried when walking and biking both fail, capped at the
 `LOOKUP_LIMIT` (8) nearest pools, and called from the browser so location
-stays off the Swimmm server. When every tier comes up empty, the page shows
-a desert.
+stays between the browser and the routing providers. When every tier comes
+up empty, the page shows a desert.
 
 ## Privacy
 
-The browser asks for your location and uses it **only in the page** to compute
-distances. It is never sent to the server, never logged, never stored.
-`/api/today` takes no input at all. There is no other user data.
+The browser asks for your location and uses it **only in the page**, snapped
+to a ~50 m grid before any routing provider sees it. There is no Swimmm
+server to send it to — the site is static files. There is no other user data.
 
 ## Develop
 
 ```sh
 npm install
-npm run dev        # boots server; fetches city data on first run
-npm test           # backend unit tests (vitest)
-npm run test:e2e   # Playwright happy path (seeded DB, no city traffic)
-npm run build && npm run preview   # production-ish
+npm run dev        # fetches city data once (~20 h cache in .city-cache/)
+npm test           # unit tests (vitest)
+npm run test:e2e   # Playwright e2e (fixture data, no city traffic)
+npm run build && npm run preview   # the real static build
 ```
 
-Environment variables:
+Environment variables (build-time):
 
-- `DB_PATH` — SQLite file (default `data/swimmm.db`)
 - `PUBLIC_MAPBOX_TOKEN` — Mapbox public (pk.) token enabling travel-time
-  filtering; omit to run without it
-- `SKIP_REFRESH=1` — never contact the city (used by e2e tests)
+  filtering; omit to build without it
+- `SWIMMM_DATA_FILE` — load the schedule from a local JSON file instead of
+  the city (used by e2e tests)
+- `BASE_PATH` — subpath the site is served under (the deploy workflow sets
+  `/<repo>` for GitHub Pages; assets are relative so builds work anywhere)
 - `PW_CHROMIUM_PATH` — use a preinstalled Chromium for Playwright instead of a
   downloaded one (e.g. `/opt/pw-browsers/chromium` in CI sandboxes)
 
