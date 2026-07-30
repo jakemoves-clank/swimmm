@@ -40,6 +40,17 @@ Mapbox (necessary to compute travel times) but still never reaches the Swimmm
 server. Without a token, or if Mapbox is unreachable, the page falls back to
 straight-line distances and hides nothing.
 
+A **top pick** is surfaced above the list via the tier cascade in
+`config.js` `TOP_RESULT`: a swim starting within 2 hours that's ≤ 15 min on
+foot, else ≤ 20 min by bike, else ≤ 30 min by transit with at most one
+connection. Transit times come from [Transitous](https://transitous.org)
+(`TRANSIT_PROVIDER` in `config.js`) — a free, community-run MOTIS routing
+API over transit agencies' official GTFS feeds (the TTC's, for Toronto).
+It's only queried when walking and biking both fail, capped at the
+`LOOKUP_LIMIT` (8) nearest pools, and called from the browser so location
+stays off the Swimmm server. When every tier comes up empty, the page shows
+a desert.
+
 ## Privacy
 
 The browser asks for your location and uses it **only in the page** to compute

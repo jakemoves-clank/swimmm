@@ -7,6 +7,27 @@
 export const DEFAULT_MAX_TRAVEL_MIN = 60;
 export const DEFAULT_MIN_SWIM_MIN = 30;
 
+// "Top pick" tiers, tried in order. A session qualifies for a tier when it
+// starts within WINDOW_MIN of now, the tier's mode gets you there within its
+// max, and you'd still get DEFAULT_MIN_SWIM_MIN in the water. If no tier
+// yields a result, the UI shows the desert.
+// Transit routing source: Transitous, a free community-run MOTIS API over
+// official agency GTFS feeds (TTC for Toronto). LOOKUP_LIMIT caps how many
+// pools we query per search (one request each) out of respect for the free
+// service — only the nearest pools are considered.
+export const TRANSIT_PROVIDER = {
+	PLAN_URL: 'https://api.transitous.org/api/v1/plan',
+	LOOKUP_LIMIT: 8
+};
+
+export const TOP_RESULT = {
+	WINDOW_MIN: 120, // only consider sessions starting within 2 hours
+	WALK_MAX_MIN: 15,
+	BIKE_MAX_MIN: 20,
+	TRANSIT_MAX_MIN: 30,
+	TRANSIT_MAX_CONNECTIONS: 1 // at most one mode change, e.g. subway → bus
+};
+
 function positive(searchParams, key, fallback) {
 	const v = Number(searchParams?.get?.(key));
 	return Number.isFinite(v) && v > 0 ? v : fallback;
