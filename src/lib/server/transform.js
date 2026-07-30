@@ -84,7 +84,8 @@ export function buildLocations(locationsJson, geojson) {
 	return locationsJson.map((loc) => {
 		const id = loc['Location ID'];
 		const address = formatAddress(loc);
-		const geo = byId.get(String(id)) || (addressKey(address) && byAddress.get(addressKey(address))) || null;
+		const key = addressKey(address);
+		const geo = byId.get(String(id)) || (key && byAddress.get(key)) || null;
 		return {
 			id,
 			name: part(loc['Location Name']),

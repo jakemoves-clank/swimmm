@@ -7,11 +7,13 @@ export function torontoNow(date = new Date()) {
 		day: '2-digit',
 		hour: '2-digit',
 		minute: '2-digit',
-		hour12: false
+		// h23 guarantees 00–23 output; hour12:false can yield "24:xx" in some
+		// hour cycles, which would mis-place midnight.
+		hourCycle: 'h23'
 	});
 	const parts = Object.fromEntries(fmt.formatToParts(date).map((p) => [p.type, p.value]));
 	return {
 		date: `${parts.year}-${parts.month}-${parts.day}`,
-		minutes: (Number(parts.hour) % 24) * 60 + Number(parts.minute)
+		minutes: Number(parts.hour) * 60 + Number(parts.minute)
 	};
 }
