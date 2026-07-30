@@ -2,7 +2,8 @@
 	import { onMount } from 'svelte';
 	import { env } from '$env/dynamic/public';
 	import { fetchTravelTimes, isReachable } from '$lib/travel.js';
-	import { maxTravelMin, minSwimMin } from '$lib/config.js';
+	import { pickTopResult, transitUnavailable } from '$lib/topResult.js';
+	import { maxTravelMin, minSwimMin, TOP_RESULT } from '$lib/config.js';
 
 	let loading = $state(true);
 	let error = $state(null);
@@ -110,6 +111,28 @@
 		const byDist = (a, b) => near(a) - near(b) || a.start_min - b.start_min;
 		return [...shown].sort(sortBy === 'closest' && coords ? byDist : byTime);
 	});
+
+	// Top pick (and its desert fallback) only exist once travel times are in —
+	// without them we can't honestly claim anything is "within a 15-min walk".
+	const topPick = $derived(
+		travel && payload
+			? pickTopResult(sessions, {
+					nowMin: payload.now_min,
+					minSwim: limits.minSwim,
+					config: TOP_RESULT,
+					getTransit: transitUnavailable
+				})
+			: null
+	);
+
+	const DESERT = String.raw`
+        \ | /
+      -- ( ) --           _ _
+        / | \            ( | )
+                    _ _   |||
+                   ( | )  |||
+     .    ~    .    |||   |||
+_.-~'           '-._|||___|||_.-~'-._`;
 </script>
 
 <svelte:head>
@@ -129,8 +152,33 @@
 	{:else if sessions.length === 0}
 		<p class="status">No more adult lane swims today. Check back tomorrow morning.</p>
 	{:else}
+		{#if topPick}
+			<section class="top-pick" aria-label="Top pick">
+				<span class="top-label">Top pick</span>
+				<div class="row">
+					<span class="pool">{topPick.session.pool}</span>
+					<span class="km">{topPick.mode} {topPick.minutes} min</span>
+				</div>
+				<div class="row">
+					<span class="time">
+						{fmtTime(topPick.session.start_min)}–{fmtTime(topPick.session.end_min)}
+						{#if topPick.session.inProgress}<em class="now">in the water now</em>{/if}
+					</span>
+				</div>
+				<div class="row meta"><span class="address">{topPick.session.address}</span></div>
+			</section>
+		{:else if travel}
+			<section class="desert-box" aria-label="No easy swim right now">
+				<pre class="desert">{DESERT}</pre>
+				<p class="desert-caption">
+					No swim within an easy trip right now — nothing inside a {TOP_RESULT.WALK_MAX_MIN} min
+					walk, {TOP_RESULT.BIKE_MAX_MIN} min ride, or {TOP_RESULT.TRANSIT_MAX_MIN} min transit
+					trip starting in the next {TOP_RESULT.WINDOW_MIN / 60} hours.
+				</p>
+			</section>
+		{/if}
 		<div class="controls">
-			<span class="count">{sessions.length} swims left today</span>
+			<span class="count">{sessions.length} {sessions.length === 1 ? 'swim' : 'swims'} left today</span>
 			<div class="sort" role="group" aria-label="Sort by">
 				<button class:active={sortBy === 'soonest'} onclick={() => (sortBy = 'soonest')}>
 					Soonest
@@ -276,6 +324,43 @@
 	}
 	.card.in-progress {
 		border-left: 4px solid #0b66e4;
+	}
+	.top-pick {
+		background: #fff;
+		border: 2px solid #0b66e4;
+		border-radius: 0.6rem;
+		padding: 0.7rem 0.85rem;
+		margin: 0.75rem 0;
+	}
+	.top-label {
+		display: inline-block;
+		font-size: 0.7rem;
+		font-weight: 700;
+		letter-spacing: 0.08em;
+		text-transform: uppercase;
+		color: #0b66e4;
+		margin-bottom: 0.25rem;
+	}
+	.desert-box {
+		text-align: center;
+		margin: 0.75rem 0;
+		padding: 0.5rem 0;
+	}
+	.desert {
+		display: inline-block;
+		text-align: left;
+		font-size: 0.7rem;
+		line-height: 1.25;
+		color: #777;
+		margin: 0;
+		overflow-x: auto;
+		max-width: 100%;
+	}
+	.desert-caption {
+		font-size: 0.8rem;
+		color: #777;
+		margin: 0.5rem auto 0;
+		max-width: 22rem;
 	}
 	.row {
 		display: flex;

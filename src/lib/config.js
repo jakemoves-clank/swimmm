@@ -7,6 +7,18 @@
 export const DEFAULT_MAX_TRAVEL_MIN = 60;
 export const DEFAULT_MIN_SWIM_MIN = 30;
 
+// "Top pick" tiers, tried in order. A session qualifies for a tier when it
+// starts within WINDOW_MIN of now, the tier's mode gets you there within its
+// max, and you'd still get DEFAULT_MIN_SWIM_MIN in the water. If no tier
+// yields a result, the UI shows the desert.
+export const TOP_RESULT = {
+	WINDOW_MIN: 120, // only consider sessions starting within 2 hours
+	WALK_MAX_MIN: 15,
+	BIKE_MAX_MIN: 20,
+	TRANSIT_MAX_MIN: 30,
+	TRANSIT_MAX_CONNECTIONS: 1 // at most one mode change, e.g. subway → bus
+};
+
 function positive(searchParams, key, fallback) {
 	const v = Number(searchParams?.get?.(key));
 	return Number.isFinite(v) && v > 0 ? v : fallback;

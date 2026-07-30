@@ -40,6 +40,14 @@ Mapbox (necessary to compute travel times) but still never reaches the Swimmm
 server. Without a token, or if Mapbox is unreachable, the page falls back to
 straight-line distances and hides nothing.
 
+A **top pick** is surfaced above the list via the tier cascade in
+`config.js` `TOP_RESULT`: a swim starting within 2 hours that's ≤ 15 min on
+foot, else ≤ 20 min by bike, else ≤ 30 min by transit with at most one
+connection. Transit needs a routing provider (Mapbox has none) — see the
+pluggable `getTransit` interface in `src/lib/topResult.js`; until one is
+wired up that tier reports unavailable. When every tier comes up empty, the
+page shows a desert.
+
 ## Privacy
 
 The browser asks for your location and uses it **only in the page** to compute
