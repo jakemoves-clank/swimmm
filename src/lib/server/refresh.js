@@ -20,9 +20,20 @@ const URLS = {
 	geojson: `${CKAN}/dataset/cbea3a67-9168-4c6d-8186-16ac1a795b5b/resource/f6cdcd50-da7b-4ede-8e60-c3cdba70b559/download/parks-and-recreation-facilities-4326.geojson`
 };
 
+// The biggest city file is ~13 MB; a hung or absurdly large response should
+// fail the refresh (and be retried next tick) rather than stall it forever.
+const FETCH_TIMEOUT_MS = 120_000;
+const MAX_RESPONSE_BYTES = 100 * 1024 * 1024;
+
 async function getJson(fetchImpl, url) {
-	const res = await fetchImpl(url);
+	const res = await fetchImpl(url, { signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) });
 	if (!res.ok) throw new Error(`GET ${url} -> ${res.status}`);
+	// Cheap early-out only: a response without a trustworthy content-length
+	// isn't checked here. The abort timeout above is the real backstop.
+	const length = Number(res.headers?.get?.('content-length'));
+	if (Number.isFinite(length) && length > MAX_RESPONSE_BYTES) {
+		throw new Error(`GET ${url} -> ${length} bytes exceeds cap`);
+	}
 	return res.json();
 }
 

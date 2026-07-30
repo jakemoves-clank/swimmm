@@ -4,13 +4,28 @@
 // DEFAULT_MAX_TRAVEL_MIN: hide swims farther than this by bike or on foot.
 // DEFAULT_MIN_SWIM_MIN: hide swims you couldn't be in the water for at
 // least this long after travelling there.
+// LOCATION_GRID_DEG: location precision shared with routing providers
+// (Mapbox, Transitous). Coordinates are snapped to this grid before leaving
+// the device: 0.0005° ≈ 55 m of latitude (~40 m of longitude in Toronto).
+// Coarser (larger) values share less; travel times are unaffected until
+// roughly 0.005° (~500 m).
 export const DEFAULT_MAX_TRAVEL_MIN = 60;
 export const DEFAULT_MIN_SWIM_MIN = 30;
+export const LOCATION_GRID_DEG = 0.0005;
 
-// "Top pick" tiers, tried in order. A session qualifies for a tier when it
-// starts within WINDOW_MIN of now, the tier's mode gets you there within its
-// max, and you'd still get DEFAULT_MIN_SWIM_MIN in the water. If no tier
-// yields a result, the UI shows the desert.
+export function snapToGrid(coords, grid = LOCATION_GRID_DEG) {
+	// Trim binary-float noise (43.653000000000006) at the grid's own
+	// precision, so a finer grid still lands on its own steps.
+	const decimals = Math.max(0, Math.ceil(-Math.log10(grid)) + 1);
+	const snap = (v) => Number((Math.round(v / grid) * grid).toFixed(decimals));
+	return { lat: snap(coords.lat), lng: snap(coords.lng) };
+}
+
+// Where to send people when we have no data to show: the city's own public
+// lane swim schedule listing.
+export const CITY_LANE_SWIM_URL =
+	'https://www.toronto.ca/data/parks/prd/swimming/dropin/lane/index.html';
+
 // Transit routing source: Transitous, a free community-run MOTIS API over
 // official agency GTFS feeds (TTC for Toronto). LOOKUP_LIMIT caps how many
 // pools we query per search (one request each) out of respect for the free
@@ -20,6 +35,10 @@ export const TRANSIT_PROVIDER = {
 	LOOKUP_LIMIT: 8
 };
 
+// "Top pick" tiers, tried in order. A session qualifies for a tier when it
+// starts within WINDOW_MIN of now, the tier's mode gets you there within its
+// max, and you'd still get DEFAULT_MIN_SWIM_MIN in the water. If no tier
+// yields a result, the UI shows the desert.
 export const TOP_RESULT = {
 	WINDOW_MIN: 120, // only consider sessions starting within 2 hours
 	WALK_MAX_MIN: 15,
@@ -28,9 +47,12 @@ export const TOP_RESULT = {
 	TRANSIT_MAX_CONNECTIONS: 1 // at most one mode change, e.g. subway → bus
 };
 
+// URL overrides outside (0, PARAM_CAP_MIN] fall back to the default.
+const PARAM_CAP_MIN = 1440;
+
 function positive(searchParams, key, fallback) {
 	const v = Number(searchParams?.get?.(key));
-	return Number.isFinite(v) && v > 0 ? v : fallback;
+	return Number.isFinite(v) && v > 0 && v <= PARAM_CAP_MIN ? v : fallback;
 }
 
 // ?max=45 → 45-minute travel cutoff

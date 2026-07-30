@@ -4,7 +4,7 @@
 	import { fetchTravelTimes, isReachable } from '$lib/travel.js';
 	import { pickTopResult } from '$lib/topResult.js';
 	import { fetchTransitTimes } from '$lib/transit.js';
-	import { maxTravelMin, minSwimMin, TOP_RESULT } from '$lib/config.js';
+	import { maxTravelMin, minSwimMin, snapToGrid, TOP_RESULT, CITY_LANE_SWIM_URL } from '$lib/config.js';
 
 	let loading = $state(true);
 	let error = $state(null);
@@ -47,7 +47,9 @@
 		if (navigator.geolocation) {
 			navigator.geolocation.getCurrentPosition(
 				(pos) => {
-					coords = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+					// Snapped to a ~50 m grid before anything (Mapbox, Transitous)
+					// sees it — precise position stays on the device.
+					coords = snapToGrid({ lat: pos.coords.latitude, lng: pos.coords.longitude });
 					sortBy = 'closest';
 					loadTravelTimes();
 				},
@@ -196,9 +198,15 @@
 	{#if loading}
 		<p class="status">Loading today's swims…</p>
 	{:else if error}
-		<p class="status">Couldn't load swim times ({error}). Try again in a minute.</p>
+		<p class="status">
+			Couldn't load swim times ({error}). Try again in a minute, or check the
+			<a href={CITY_LANE_SWIM_URL}>city's lane swim schedules</a> directly.
+		</p>
 	{:else if sessions.length === 0}
-		<p class="status">No more adult lane swims today. Check back tomorrow morning.</p>
+		<p class="status">
+			No more adult lane swims today. Check back tomorrow morning, or see the
+			<a href={CITY_LANE_SWIM_URL}>city's lane swim schedules</a>.
+		</p>
 	{:else}
 		{#if topPick}
 			<section class="top-pick" aria-label="Top pick">
@@ -316,6 +324,9 @@
 		color: #555;
 		padding: 2rem 0;
 		text-align: center;
+	}
+	.status a {
+		color: #0b66e4;
 	}
 	.controls {
 		display: flex;
