@@ -68,10 +68,10 @@ test('falls back to a transit top pick when walking and biking are too slow', as
 	const top = page.locator('.top-pick');
 	await expect(top).toContainText('Nearby Pool');
 	await expect(top).toContainText('transit 22 min');
-	await expect(page.locator('.desert')).toHaveCount(0);
+	await expect(page.locator('.dry-pool')).toHaveCount(0);
 });
 
-test('shows the desert when nothing is an easy walk, ride, or transit trip', async ({ page }) => {
+test('shows the dry pool when nothing is an easy walk, ride, or transit trip', async ({ page }) => {
 	// No transit routes either
 	await page.route('**/api.transitous.org/**', (route) =>
 		route.fulfill({ json: { itineraries: [] } })
@@ -96,6 +96,6 @@ test('shows the desert when nothing is an easy walk, ride, or transit trip', asy
 	await expect(page.getByText('Nearby Pool')).toBeVisible();
 	// …but there's no top pick, just sand and a cactus
 	await expect(page.locator('.top-pick')).toHaveCount(0);
-	await expect(page.locator('.desert')).toBeVisible();
+	await expect(page.locator('.dry-pool')).toBeVisible();
 	await expect(page.getByText(/No swim within an easy trip right now/)).toBeVisible();
 });

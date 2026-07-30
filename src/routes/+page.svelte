@@ -21,7 +21,7 @@
 		if (!mapboxToken || !coords || !payload) return;
 		const seen = new Map();
 		for (const s of payload.sessions) {
-			if (s.lat != null && !seen.has(s.location_id))
+			if (hasCoords(s) && !seen.has(s.location_id))
 				seen.set(s.location_id, { id: s.location_id, lat: s.lat, lng: s.lng });
 		}
 		try {
@@ -84,6 +84,12 @@
 		return km < 10 ? `${km.toFixed(1)} km` : `${Math.round(km)} km`;
 	}
 
+	// Both halves must be present: a half-located pool would build a malformed
+	// routing URL and poison the distance sort with NaN.
+	function hasCoords(s) {
+		return Number.isFinite(s.lat) && Number.isFinite(s.lng);
+	}
+
 	function fastestMin(t) {
 		const modes = [t?.walk, t?.bike].filter((m) => m != null);
 		return modes.length ? Math.min(...modes) : null;
@@ -105,7 +111,7 @@
 			const t = travel?.get(s.location_id);
 			return {
 				...s,
-				km: coords && s.lat != null ? haversineKm(coords, { lat: s.lat, lng: s.lng }) : null,
+				km: coords && hasCoords(s) ? haversineKm(coords, { lat: s.lat, lng: s.lng }) : null,
 				travel: t,
 				travelLabel: travelLabel(t),
 				inProgress: s.start_min <= payload.now_min
@@ -127,7 +133,7 @@
 		return [...shown].sort(sortBy === 'closest' && coords ? byDist : byTime);
 	});
 
-	// Top pick (and its desert fallback) only exist once travel times are in —
+	// Top pick (and its dry-pool fallback) only exist once travel times are in —
 	// without them we can't honestly claim anything is "within a 15-min walk".
 	let transitTimes = $state(null); // Map<location_id, {minutes, connections}>
 	let transitTried = false;
@@ -150,7 +156,7 @@
 		const candidates = new Map();
 		for (const s of sessions) {
 			if (
-				s.lat != null &&
+				hasCoords(s) &&
 				s.start_min - payload.now_min <= TOP_RESULT.WINDOW_MIN &&
 				!candidates.has(s.location_id)
 			) {
@@ -166,14 +172,15 @@
 		);
 	});
 
-	const DESERT = String.raw`
-        \ | /
-      -- ( ) --           _ _
-        / | \            ( | )
-                    _ _   |||
-                   ( | )  |||
-     .    ~    .    |||   |||
-_.-~'           '-._|||___|||_.-~'-._`;
+	// Shown when no tier yields a top pick. Decorative only — the caption
+	// beneath it carries the meaning for screen readers.
+	const DRY_POOL = String.raw`
+ .-----------------------------.
+ | |                           |
+ | |                           |
+ | |      no water here        |
+ | |___________________________|
+  \___________________________/`;
 </script>
 
 <svelte:head>
@@ -209,9 +216,9 @@ _.-~'           '-._|||___|||_.-~'-._`;
 				<div class="row meta"><span class="address">{topPick.session.address}</span></div>
 			</section>
 		{:else if travel}
-			<section class="desert-box" aria-label="No easy swim right now">
-				<pre class="desert">{DESERT}</pre>
-				<p class="desert-caption">
+			<section class="dry-pool-box" aria-label="No easy swim right now">
+				<pre class="dry-pool" aria-hidden="true">{DRY_POOL}</pre>
+				<p class="dry-pool-caption">
 					No swim within an easy trip right now — nothing inside a {TOP_RESULT.WALK_MAX_MIN} min
 					walk, {TOP_RESULT.BIKE_MAX_MIN} min ride, or {TOP_RESULT.TRANSIT_MAX_MIN} min transit
 					trip starting in the next {TOP_RESULT.WINDOW_MIN / 60} hours.
@@ -382,12 +389,12 @@ _.-~'           '-._|||___|||_.-~'-._`;
 		color: #0b66e4;
 		margin-bottom: 0.25rem;
 	}
-	.desert-box {
+	.dry-pool-box {
 		text-align: center;
 		margin: 0.75rem 0;
 		padding: 0.5rem 0;
 	}
-	.desert {
+	.dry-pool {
 		display: inline-block;
 		text-align: left;
 		font-size: 0.7rem;
@@ -397,7 +404,7 @@ _.-~'           '-._|||___|||_.-~'-._`;
 		overflow-x: auto;
 		max-width: 100%;
 	}
-	.desert-caption {
+	.dry-pool-caption {
 		font-size: 0.8rem;
 		color: #777;
 		margin: 0.5rem auto 0;
