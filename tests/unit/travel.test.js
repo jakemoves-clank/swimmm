@@ -21,6 +21,11 @@ describe('matrixUrl', () => {
 		expect(url).toContain('annotations=duration');
 		expect(url).toContain('access_token=pk.test');
 	});
+
+	it('encodes query values so a token with reserved characters cannot break the url', () => {
+		const url = matrixUrl('walking', origin, [pool(1, 43.7, -79.5)], 'pk.a+b&c=d');
+		expect(new URL(url).searchParams.get('access_token')).toBe('pk.a+b&c=d');
+	});
 });
 
 describe('fetchTravelTimes', () => {
@@ -37,6 +42,13 @@ describe('fetchTravelTimes', () => {
 		const t = await fetchTravelTimes(origin, pools, 'pk.test', fetchImpl);
 		expect(t.get(1)).toEqual({ walk: 20, bike: 8 });
 		expect(t.get(2)).toEqual({ walk: 100, bike: 40 });
+	});
+
+	it('names the problem when Mapbox returns an unexpected shape', async () => {
+		const fetchImpl = async () => ({ ok: true, json: async () => ({ code: 'Ok' }) });
+		await expect(
+			fetchTravelTimes(origin, [pool(1, 43.7, -79.5)], 'pk.test', fetchImpl)
+		).rejects.toThrow(/durations/i);
 	});
 
 	it('skips null durations (unroutable pools)', async () => {
