@@ -13,12 +13,12 @@ function torontoNow() {
 		day: '2-digit',
 		hour: '2-digit',
 		minute: '2-digit',
-		hour12: false
+		hourCycle: 'h23'
 	});
 	const parts = Object.fromEntries(fmt.formatToParts(new Date()).map((p) => [p.type, p.value]));
 	return {
 		date: `${parts.year}-${parts.month}-${parts.day}`,
-		minutes: (Number(parts.hour) % 24) * 60 + Number(parts.minute)
+		minutes: Number(parts.hour) * 60 + Number(parts.minute)
 	};
 }
 
