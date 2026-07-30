@@ -29,8 +29,7 @@ export default defineConfig({
 		reuseExistingServer: false,
 		timeout: 180_000,
 		env: {
-			DB_PATH: 'tests/e2e/.tmp/e2e.db',
-			SKIP_REFRESH: '1',
+			SWIMMM_DATA_FILE: 'tests/e2e/.tmp/schedule.json',
 			PUBLIC_MAPBOX_TOKEN: 'pk.e2e-test-token'
 		}
 	}

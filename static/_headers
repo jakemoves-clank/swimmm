@@ -1,0 +1,7 @@
+# Used by Cloudflare Pages (GitHub Pages ignores this file — there, the CSP
+# ships as a meta tag in the prerendered HTML and the rest is best-effort).
+/*
+  X-Content-Type-Options: nosniff
+  X-Frame-Options: DENY
+  Referrer-Policy: no-referrer
+  Permissions-Policy: geolocation=(self), camera=(), microphone=(), payment=()
