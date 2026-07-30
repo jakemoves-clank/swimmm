@@ -25,6 +25,21 @@ without a distance.
 "Adult lane swim" = drop-in swim rows whose title starts with "Lane Swim",
 excluding family sessions and anything with an age cap below 18.
 
+## Travel times (optional)
+
+With a Mapbox public token set (`PUBLIC_MAPBOX_TOKEN`), the page fetches
+walking and cycling times from the [Mapbox Matrix API](https://docs.mapbox.com/api/navigation/matrix/)
+and only shows swims you can actually get to: within
+`DEFAULT_MAX_TRAVEL_MIN` (60) minutes by the faster mode, arriving with at
+least `DEFAULT_MIN_SWIM_MIN` (30) minutes left to swim. Both knobs live in
+`src/lib/config.js` — the single place a future settings UI should read and
+write — and can be overridden per-visit with `?max=45&swim=20`.
+
+The browser calls Mapbox directly, so the user's location is shared with
+Mapbox (necessary to compute travel times) but still never reaches the Swimmm
+server. Without a token, or if Mapbox is unreachable, the page falls back to
+straight-line distances and hides nothing.
+
 ## Privacy
 
 The browser asks for your location and uses it **only in the page** to compute
@@ -44,6 +59,8 @@ npm run build && npm run preview   # production-ish
 Environment variables:
 
 - `DB_PATH` — SQLite file (default `data/swimmm.db`)
+- `PUBLIC_MAPBOX_TOKEN` — Mapbox public (pk.) token enabling travel-time
+  filtering; omit to run without it
 - `SKIP_REFRESH=1` — never contact the city (used by e2e tests)
 - `PW_CHROMIUM_PATH` — use a preinstalled Chromium for Playwright instead of a
   downloaded one (e.g. `/opt/pw-browsers/chromium` in CI sandboxes)

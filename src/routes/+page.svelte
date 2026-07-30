@@ -1,5 +1,8 @@
 <script>
 	import { onMount } from 'svelte';
+	import { env } from '$env/dynamic/public';
+	import { fetchTravelTimes, isReachable } from '$lib/travel.js';
+	import { maxTravelMin, minSwimMin } from '$lib/config.js';
 
 	let loading = $state(true);
 	let error = $state(null);
@@ -7,8 +10,29 @@
 	let coords = $state(null); // { lat, lng } — lives only in this browser tab
 	let geoDenied = $state(false);
 	let sortBy = $state('soonest');
+	let travel = $state(null); // Map<location_id, {walk, bike}> once Mapbox responds
+	let limits = $state({ maxTravel: 60, minSwim: 30 });
+
+	const mapboxToken = env.PUBLIC_MAPBOX_TOKEN;
+
+	async function loadTravelTimes() {
+		if (!mapboxToken || !coords || !payload) return;
+		const seen = new Map();
+		for (const s of payload.sessions) {
+			if (s.lat != null && !seen.has(s.location_id))
+				seen.set(s.location_id, { id: s.location_id, lat: s.lat, lng: s.lng });
+		}
+		try {
+			travel = await fetchTravelTimes(coords, [...seen.values()], mapboxToken);
+		} catch (e) {
+			console.warn('travel times unavailable:', e.message);
+			travel = null; // fall back to straight-line distances, no filtering
+		}
+	}
 
 	onMount(async () => {
+		const params = new URLSearchParams(location.search);
+		limits = { maxTravel: maxTravelMin(params), minSwim: minSwimMin(params) };
 		try {
 			const res = await fetch('/api/today');
 			if (!res.ok) throw new Error(`API error ${res.status}`);
@@ -23,6 +47,7 @@
 				(pos) => {
 					coords = { lat: pos.coords.latitude, lng: pos.coords.longitude };
 					sortBy = 'closest';
+					loadTravelTimes();
 				},
 				() => {
 					geoDenied = true;
@@ -57,16 +82,33 @@
 		return km < 10 ? `${km.toFixed(1)} km` : `${Math.round(km)} km`;
 	}
 
-	const sessions = $derived.by(() => {
+	function fastestMin(t) {
+		const modes = [t?.walk, t?.bike].filter((m) => m != null);
+		return modes.length ? Math.min(...modes) : null;
+	}
+
+	const annotated = $derived.by(() => {
 		if (!payload) return [];
-		const withDist = payload.sessions.map((s) => ({
+		return payload.sessions.map((s) => ({
 			...s,
 			km: coords && s.lat != null ? haversineKm(coords, { lat: s.lat, lng: s.lng }) : null,
+			travel: travel?.get(s.location_id),
 			inProgress: s.start_min <= payload.now_min
 		}));
-		const byTime = (a, b) => a.start_min - b.start_min || (a.km ?? 1e9) - (b.km ?? 1e9);
-		const byDist = (a, b) => (a.km ?? 1e9) - (b.km ?? 1e9) || a.start_min - b.start_min;
-		return withDist.sort(sortBy === 'closest' && coords ? byDist : byTime);
+	});
+
+	const hiddenCount = $derived(
+		travel ? annotated.filter((s) => !isReachable(s, s.travel, payload.now_min, limits)).length : 0
+	);
+
+	const sessions = $derived.by(() => {
+		const shown = travel
+			? annotated.filter((s) => isReachable(s, s.travel, payload.now_min, limits))
+			: annotated;
+		const near = (s) => fastestMin(s.travel) ?? s.km ?? 1e9;
+		const byTime = (a, b) => a.start_min - b.start_min || near(a) - near(b);
+		const byDist = (a, b) => near(a) - near(b) || a.start_min - b.start_min;
+		return [...shown].sort(sortBy === 'closest' && coords ? byDist : byTime);
 	});
 </script>
 
@@ -108,12 +150,22 @@
 				browser; it is never sent to or stored on our server.
 			</p>
 		{/if}
+		{#if hiddenCount > 0}
+			<p class="geo-note">
+				{hiddenCount} {hiddenCount === 1 ? 'swim' : 'swims'} hidden — farther than {limits.maxTravel}
+				min by bike or on foot, or too late for a {limits.minSwim}-min swim.
+			</p>
+		{/if}
 		<ul class="sessions">
 			{#each sessions as s (s.course_id + '-' + s.location_id + '-' + s.start_min)}
 				<li class="card" class:in-progress={s.inProgress}>
 					<div class="row">
 						<span class="pool">{s.pool}</span>
-						{#if s.km != null}<span class="km">{fmtKm(s.km)}</span>{/if}
+						{#if s.travel && (s.travel.bike != null || s.travel.walk != null)}
+							<span class="km">
+								{#if s.travel.bike != null}bike {s.travel.bike} min{/if}{#if s.travel.bike != null && s.travel.walk != null}&nbsp;·&nbsp;{/if}{#if s.travel.walk != null}walk {s.travel.walk} min{/if}
+							</span>
+						{:else if s.km != null}<span class="km">{fmtKm(s.km)}</span>{/if}
 					</div>
 					<div class="row">
 						<span class="time">

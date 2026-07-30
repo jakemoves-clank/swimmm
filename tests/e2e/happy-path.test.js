@@ -12,6 +12,9 @@ test.use({
 test('shows today’s lane swims, sorted by closeness, with times and distances', async ({
 	page
 }) => {
+	// This test covers the no-travel-times fallback: Mapbox is unreachable, so
+	// the page shows straight-line distances and hides nothing.
+	await page.route('**/api.mapbox.com/**', (route) => route.abort());
 	await page.goto('/');
 
 	// Both seeded pools with lane swim today are listed
