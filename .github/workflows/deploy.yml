@@ -78,10 +78,28 @@ jobs:
       - name: Build (fetches city data once)
         env:
           BASE_PATH: /${{ github.event.repository.name }}
-          PUBLIC_MAPBOX_TOKEN: ${{ vars.PUBLIC_MAPBOX_TOKEN }}
+          # The token is public by design (it ships to every browser), so a
+          # repo *variable* is the right home for it. Accept a secret too:
+          # both tabs live under the same settings page and picking the wrong
+          # one used to fail silently — `vars.X` is simply empty, the build
+          # succeeds, and the site deploys with travel times switched off.
+          PUBLIC_MAPBOX_TOKEN: ${{ vars.PUBLIC_MAPBOX_TOKEN || secrets.PUBLIC_MAPBOX_TOKEN }}
         run: |
           npm run build
           cp .city-cache/stamp.txt build/stamp.txt
+
+      # Without a token the site still builds and lists every swim — it just
+      # can't show walk/bike/transit times or a top pick. That is a legitimate
+      # deploy, so warn rather than fail; the point is that it stops being
+      # invisible. Only ever reports whether a token arrived, never its value.
+      - name: Report whether travel times are enabled
+        run: |
+          if grep -q 'mapboxToken:null' build/index.html; then
+            echo "::warning::No PUBLIC_MAPBOX_TOKEN reached the build — deploying without walk/bike/transit times. Add it under Settings → Secrets and variables → Actions (repository scope, not the github-pages environment)."
+            echo 'Travel times: **off** — no `PUBLIC_MAPBOX_TOKEN` reached the build.' >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo 'Travel times: **on**.' >> "$GITHUB_STEP_SUMMARY"
+          fi
 
       - uses: actions/upload-pages-artifact@v3
         with:
