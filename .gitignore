@@ -5,3 +5,4 @@ data/*.db
 data/*.db-journal
 test-results/
 playwright-report/
+tests/e2e/.tmp/
