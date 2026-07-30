@@ -11,6 +11,8 @@
 	let now = $state(null); // set client-side; the prerendered shell shows "Loading"
 	let coords = $state(null); // { lat, lng } — lives only in this browser tab
 	let geoDenied = $state(false);
+	let framed = $state(false);
+	let selfUrl = $state('');
 	let sortBy = $state('soonest');
 	let travel = $state(null); // Map<location_id, {walk, bike}> once Mapbox responds
 	let limits = $state({ maxTravel: 60, minSwim: 30 });
@@ -62,6 +64,22 @@
 		const params = new URLSearchParams(location.search);
 		limits = { maxTravel: maxTravelMin(params), minSwim: minSwimMin(params) };
 		now = torontoNow();
+
+		// GitHub Pages can't send X-Frame-Options, and CSP frame-ancestors is
+		// header-only (a meta tag can't carry it), so a hostile page could frame
+		// this one and dress up the location prompt. Try to break out; if the
+		// browser blocks that, still refuse to ask for location.
+		if (window.self !== window.top) {
+			framed = true;
+			selfUrl = window.self.location.href;
+			try {
+				window.top.location = window.self.location.href;
+			} catch {
+				// cross-origin parent blocked the navigation — stay put, no prompt
+			}
+			return;
+		}
+
 		if (navigator.geolocation) {
 			navigator.geolocation.getCurrentPosition(
 				(pos) => {
@@ -261,7 +279,12 @@
 				</button>
 			</div>
 		</div>
-		{#if geoDenied}
+		{#if framed}
+			<p class="geo-note">
+				Swimmm is embedded in another page, so it won't ask for your location.
+				<a href={selfUrl} target="_top" rel="noopener">Open Swimmm directly</a> to see travel times.
+			</p>
+		{:else if geoDenied}
 			<p class="geo-note">
 				Location unavailable — showing swims by start time. Your location is only ever used in your
 				browser; it is never sent to or stored on our server.

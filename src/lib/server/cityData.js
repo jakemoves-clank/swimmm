@@ -22,15 +22,30 @@ const URLS = {
 
 const CACHE_MAX_AGE_MS = 20 * 3600_000;
 const FETCH_TIMEOUT_MS = 120_000;
+// The largest city file is ~13 MB. A runaway upstream shouldn't be able to
+// exhaust the build's memory, so the cap is enforced while streaming rather
+// than trusting content-length, which can be absent or wrong.
+const MAX_RESPONSE_BYTES = 100 * 1024 * 1024;
 
 const dispatcher = new EnvHttpProxyAgent();
 const defaultFetch = (url) =>
 	undiciFetch(url, { dispatcher, signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) });
 
+export async function readJsonCapped(res, url, maxBytes = MAX_RESPONSE_BYTES) {
+	const chunks = [];
+	let total = 0;
+	for await (const chunk of res.body) {
+		total += chunk.length;
+		if (total > maxBytes) throw new Error(`GET ${url} -> response exceeds ${maxBytes} byte cap`);
+		chunks.push(chunk);
+	}
+	return JSON.parse(Buffer.concat(chunks).toString('utf8'));
+}
+
 async function getJson(fetchImpl, url) {
 	const res = await fetchImpl(url);
 	if (!res.ok) throw new Error(`GET ${url} -> ${res.status}`);
-	return res.json();
+	return readJsonCapped(res, url);
 }
 
 export async function loadSchedule({ cacheDir = '.city-cache', fetchImpl = defaultFetch } = {}) {
