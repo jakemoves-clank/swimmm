@@ -64,6 +64,9 @@ export function buildLocations(locationsJson, geojson) {
 		const p = f.properties || {};
 		const coords = firstPoint(f.geometry);
 		if (!coords) continue;
+		// Coordinates end up interpolated into routing-API URLs client-side,
+		// so never store anything that isn't a plain finite number.
+		if (!Number.isFinite(coords[0]) || !Number.isFinite(coords[1])) continue;
 		const entry = { lng: coords[0], lat: coords[1] };
 		if (p.LOCATIONID) byId.set(String(p.LOCATIONID), entry);
 		const key = p.ADDRESS ? addressKey(p.ADDRESS) : null;
