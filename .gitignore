@@ -1,8 +1,7 @@
 node_modules/
 .svelte-kit/
 build/
-data/*.db
-data/*.db-journal
+data/
 test-results/
 playwright-report/
 tests/e2e/.tmp/
