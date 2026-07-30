@@ -4,17 +4,13 @@
 // DEFAULT_MAX_TRAVEL_MIN: hide swims farther than this by bike or on foot.
 // DEFAULT_MIN_SWIM_MIN: hide swims you couldn't be in the water for at
 // least this long after travelling there.
+// LOCATION_GRID_DEG: location precision shared with routing providers
+// (Mapbox, Transitous). Coordinates are snapped to this grid before leaving
+// the device: 0.0005° ≈ 55 m of latitude (~40 m of longitude in Toronto).
+// Coarser (larger) values share less; travel times are unaffected until
+// roughly 0.005° (~500 m).
 export const DEFAULT_MAX_TRAVEL_MIN = 60;
 export const DEFAULT_MIN_SWIM_MIN = 30;
-
-// "Top pick" tiers, tried in order. A session qualifies for a tier when it
-// starts within WINDOW_MIN of now, the tier's mode gets you there within its
-// max, and you'd still get DEFAULT_MIN_SWIM_MIN in the water. If no tier
-// yields a result, the UI shows the desert.
-// Coordinates shared with routing providers (Mapbox, Transitous) are snapped
-// to this grid first: 0.0005° ≈ 55 m of latitude (~40 m of longitude in
-// Toronto), so the precise position never leaves the device. Travel times are
-// unaffected at this scale.
 export const LOCATION_GRID_DEG = 0.0005;
 
 export function snapToGrid(coords, grid = LOCATION_GRID_DEG) {
@@ -36,6 +32,10 @@ export const TRANSIT_PROVIDER = {
 	LOOKUP_LIMIT: 8
 };
 
+// "Top pick" tiers, tried in order. A session qualifies for a tier when it
+// starts within WINDOW_MIN of now, the tier's mode gets you there within its
+// max, and you'd still get DEFAULT_MIN_SWIM_MIN in the water. If no tier
+// yields a result, the UI shows the desert.
 export const TOP_RESULT = {
 	WINDOW_MIN: 120, // only consider sessions starting within 2 hours
 	WALK_MAX_MIN: 15,
