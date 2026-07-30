@@ -78,11 +78,18 @@ jobs:
       - name: Build (fetches city data once)
         env:
           BASE_PATH: /${{ github.event.repository.name }}
-          # The token is public by design (it ships to every browser), so a
-          # repo *variable* is the right home for it. Accept a secret too:
-          # both tabs live under the same settings page and picking the wrong
-          # one used to fail silently — `vars.X` is simply empty, the build
-          # succeeds, and the site deploys with travel times switched off.
+          # Read both namespaces so either home works. The token is public by
+          # design — it's compiled into the bundle and served to every visitor,
+          # so a secret buys no confidentiality (URL-restricting it in the
+          # Mapbox dashboard is what actually protects the quota); a secret
+          # does mask it in logs, which is a fair reason to prefer one.
+          # Reading only one namespace failed silently: the unset expression is
+          # just empty, so the build passes and the site deploys with travel
+          # times switched off.
+          #
+          # Repository scope either way — an *environment* secret is visible
+          # only to jobs declaring that environment, and this job deliberately
+          # joins none (it runs third-party code, so it stays least-privileged).
           PUBLIC_MAPBOX_TOKEN: ${{ vars.PUBLIC_MAPBOX_TOKEN || secrets.PUBLIC_MAPBOX_TOKEN }}
         run: |
           npm run build
@@ -95,7 +102,7 @@ jobs:
       - name: Report whether travel times are enabled
         run: |
           if grep -q 'mapboxToken:null' build/index.html; then
-            echo "::warning::No PUBLIC_MAPBOX_TOKEN reached the build — deploying without walk/bike/transit times. Add it under Settings → Secrets and variables → Actions (repository scope, not the github-pages environment)."
+            echo "::warning::No PUBLIC_MAPBOX_TOKEN reached the build — deploying without walk/bike/transit times. Add it under Settings → Secrets and variables → Actions as a repository secret or variable (an environment secret will not reach this job)."
             echo 'Travel times: **off** — no `PUBLIC_MAPBOX_TOKEN` reached the build.' >> "$GITHUB_STEP_SUMMARY"
           else
             echo 'Travel times: **on**.' >> "$GITHUB_STEP_SUMMARY"
