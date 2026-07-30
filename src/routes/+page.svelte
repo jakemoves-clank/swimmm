@@ -89,14 +89,28 @@
 		return modes.length ? Math.min(...modes) : null;
 	}
 
+	// "bike 8 min · walk 20 min", omitting modes we have no time for.
+	function travelLabel(t) {
+		return [
+			t?.bike != null ? `bike ${t.bike} min` : null,
+			t?.walk != null ? `walk ${t.walk} min` : null
+		]
+			.filter(Boolean)
+			.join(' · ');
+	}
+
 	const annotated = $derived.by(() => {
 		if (!payload) return [];
-		return payload.sessions.map((s) => ({
-			...s,
-			km: coords && s.lat != null ? haversineKm(coords, { lat: s.lat, lng: s.lng }) : null,
-			travel: travel?.get(s.location_id),
-			inProgress: s.start_min <= payload.now_min
-		}));
+		return payload.sessions.map((s) => {
+			const t = travel?.get(s.location_id);
+			return {
+				...s,
+				km: coords && s.lat != null ? haversineKm(coords, { lat: s.lat, lng: s.lng }) : null,
+				travel: t,
+				travelLabel: travelLabel(t),
+				inProgress: s.start_min <= payload.now_min
+			};
+		});
 	});
 
 	const hiddenCount = $derived(
@@ -236,11 +250,11 @@ _.-~'           '-._|||___|||_.-~'-._`;
 				<li class="card" class:in-progress={s.inProgress}>
 					<div class="row">
 						<span class="pool">{s.pool}</span>
-						{#if s.travel && (s.travel.bike != null || s.travel.walk != null)}
-							<span class="km">
-								{#if s.travel.bike != null}bike {s.travel.bike} min{/if}{#if s.travel.bike != null && s.travel.walk != null}&nbsp;·&nbsp;{/if}{#if s.travel.walk != null}walk {s.travel.walk} min{/if}
-							</span>
-						{:else if s.km != null}<span class="km">{fmtKm(s.km)}</span>{/if}
+						{#if s.travelLabel}
+							<span class="km">{s.travelLabel}</span>
+						{:else if s.km != null}
+							<span class="km">{fmtKm(s.km)}</span>
+						{/if}
 					</div>
 					<div class="row">
 						<span class="time">
