@@ -2,10 +2,11 @@ import { test, expect } from '@playwright/test';
 
 // The user story: a person in Toronto opens Swimmm, shares their location,
 // and sees which city pools have adult lane swim today — closest and soonest.
+// Viewport/UA come from the device profiles in playwright.config.js
+// (mobile-chrome = Pixel 7, mobile-safari = iPhone 13).
 test.use({
 	geolocation: { latitude: 43.66, longitude: -79.4 }, // beside "Nearby Pool"
-	permissions: ['geolocation'],
-	viewport: { width: 390, height: 844 } // phone-sized
+	permissions: ['geolocation']
 });
 
 test('shows today’s lane swims, sorted by closeness, with times and distances', async ({
