@@ -220,8 +220,8 @@
 	</div>
 
 	<div class="pager">
-		<button onclick={() => step(-1)}>← {CONCEPTS[(index + 9) % 11].title}</button>
-		<button onclick={() => step(1)}>{CONCEPTS[index % 11].title} →</button>
+		<button onclick={() => step(-1)}>← {CONCEPTS[(index + CONCEPTS.length - 2) % CONCEPTS.length].title}</button>
+		<button onclick={() => step(1)}>{CONCEPTS[index % CONCEPTS.length].title} →</button>
 	</div>
 
 	{#if clock !== 'live' && day}
