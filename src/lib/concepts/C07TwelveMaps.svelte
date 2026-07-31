@@ -60,7 +60,10 @@
 	// The day wraps past noon, so a "6–7:30" range appears twice and the reader
 	// cannot tell the morning panel from the evening one. Each panel is the same
 	// ninety minutes wide, so the start alone — with its meridiem — says it all.
-	const slot = (from) => `${fmtHour(from)}${from < 720 ? 'a' : 'p'}`;
+	const slot = (min) => {
+		const m = ((min % 1440) + 1440) % 1440;
+		return `${fmtHour(m)}${m < 720 ? 'a' : 'p'}`;
+	};
 </script>
 
 <figure class="panel">
