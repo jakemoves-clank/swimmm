@@ -1,5 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import { snapToGrid, maxTravelMin, minSwimMin, LOCATION_GRID_DEG } from '../../src/lib/config.js';
+import {
+	snapToGrid,
+	maxTravelMin,
+	minSwimMin,
+	swimKindParam,
+	LOCATION_GRID_DEG
+} from '../../src/lib/config.js';
 import { buildLocations } from '../../src/lib/server/transform.js';
 
 describe('snapToGrid', () => {
@@ -36,6 +42,15 @@ describe('URL param caps', () => {
 	it('accepts sane overrides', () => {
 		expect(maxTravelMin(new URLSearchParams('max=45'))).toBe(45);
 		expect(minSwimMin(new URLSearchParams('swim=20'))).toBe(20);
+	});
+
+	it('accepts a known swim kind and falls back to lane for anything else', () => {
+		expect(swimKindParam(new URLSearchParams('kind=leisure'))).toBe('leisure');
+		expect(swimKindParam(new URLSearchParams('kind=lane'))).toBe('lane');
+		expect(swimKindParam(new URLSearchParams('kind=LEISURE'))).toBe('lane');
+		expect(swimKindParam(new URLSearchParams('kind=cannonball'))).toBe('lane');
+		expect(swimKindParam(new URLSearchParams(''))).toBe('lane');
+		expect(swimKindParam(undefined)).toBe('lane');
 	});
 });
 

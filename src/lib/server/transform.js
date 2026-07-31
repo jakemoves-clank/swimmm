@@ -8,20 +8,43 @@ function ageOrNull(v) {
 	return Number.isFinite(n) ? n : null;
 }
 
-export function isAdultLaneSwim(row) {
-	if (row.Section !== 'Swim - Drop-In') return false;
-	const title = String(row['Course Title'] || '');
-	if (!title.startsWith('Lane Swim')) return false;
+// A session an adult of any age can simply turn up to. Every genuinely
+// adult-open swim the city publishes leaves Age Max unset; the ones that cap
+// it are age-bracketed programs — "Leisure Swim: Preschool" (max 5),
+// "Leisure Swim: Youth" (13–23) — that an adult can't drop into. Family swims
+// are excluded by name for the same reason: they're a different session type,
+// not an adult one.
+//
+// Checked against the live feed: for lane swim this selects exactly the same
+// rows as the narrower "Age Max < 18" test it replaces, so widening the rule
+// to cover leisure left lane results untouched.
+function isAdultSession(row, title) {
 	if (/family/i.test(title)) return false;
-	const ageMax = ageOrNull(row['Age Max']);
-	if (ageMax !== null && ageMax < 18) return false;
-	return true;
+	return ageOrNull(row['Age Max']) === null;
 }
 
-export function toSession(row) {
+// Which kind of swim a drop-in row is, or null if it isn't one we list.
+//
+// There is no "kind" column — the section plus the course title is all the
+// city gives us. Lane titles are consistently prefixed ("Lane Swim: Long
+// Course (50m)", "Lane Swim (Women)"), so an anchored test is right for them
+// and keeps "Youth Lifeguard Club" and "Aquatic Fitness: *" out. Leisure is
+// prefixed too, except for "Adapted Leisure Swim", which qualifies the noun
+// instead — hence the unanchored test on that side.
+export function swimKind(row) {
+	if (row.Section !== 'Swim - Drop-In') return null;
+	const title = String(row['Course Title'] || '');
+	if (!isAdultSession(row, title)) return null;
+	if (/^Lane Swim/.test(title)) return 'lane';
+	if (/Leisure Swim/.test(title)) return 'leisure';
+	return null;
+}
+
+export function toSession(row, kind = swimKind(row)) {
 	return {
 		location_id: row['Location ID'],
 		course_id: row.Course_ID,
+		kind,
 		title: row['Course Title'],
 		date: row['First Date'],
 		start_min: row['Start Hour'] * 60 + (row['Start Minute'] || 0),
@@ -57,10 +80,16 @@ function firstPoint(geometry) {
 	return null;
 }
 
-// The whole publishable dataset in one shot: adult lane swim sessions plus
-// the locations they reference. This is what gets baked into the static site.
+// The whole publishable dataset in one shot: adult lane and leisure swim
+// sessions plus the locations they reference. This is what gets baked into
+// the static site. Both kinds ship together — the toggle is a client-side
+// filter over one payload, so switching tabs costs no round trip.
 export function buildSchedule(dropinRows, locationRows, geojson) {
-	const sessions = dropinRows.filter(isAdultLaneSwim).map(toSession);
+	const sessions = [];
+	for (const row of dropinRows) {
+		const kind = swimKind(row);
+		if (kind) sessions.push(toSession(row, kind));
+	}
 	const used = new Set(sessions.map((s) => s.location_id));
 	const locations = buildLocations(locationRows, geojson).filter((l) => used.has(l.id));
 	return { locations, sessions };

@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { pinClock } from './fixture-time.js';
 
 // The user story: a person in Toronto opens Swimmm, shares their location,
 // and sees which city pools have adult lane swim today — closest and soonest.
@@ -7,6 +8,10 @@ import { test, expect } from '@playwright/test';
 test.use({
 	geolocation: { latitude: 43.66, longitude: -79.4 }, // beside "Nearby Pool"
 	permissions: ['geolocation']
+});
+
+test.beforeEach(async ({ page }) => {
+	await pinClock(page);
 });
 
 test('shows today’s lane swims, sorted by closeness, with times and distances', async ({

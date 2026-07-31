@@ -53,13 +53,41 @@ const geojson = {
 };
 
 describe('buildSchedule', () => {
-	it('keeps only adult lane swims and only the locations they use', () => {
-		const { sessions, locations: locs } = buildSchedule(dropin, locations, geojson);
+	it('keeps adult lane and leisure swims, tagged with their kind', () => {
+		const { sessions } = buildSchedule(dropin, locations, geojson);
 		expect(sessions).toEqual([
-			{ location_id: 1, course_id: 10, title: 'Lane Swim', date: '2026-07-30', start_min: 540, end_min: 600 }
+			{
+				location_id: 1,
+				course_id: 10,
+				kind: 'lane',
+				title: 'Lane Swim',
+				date: '2026-07-30',
+				start_min: 540,
+				end_min: 600
+			},
+			{
+				location_id: 2,
+				course_id: 11,
+				kind: 'leisure',
+				title: 'Leisure Swim',
+				date: '2026-07-30',
+				start_min: 540,
+				end_min: 600
+			}
 		]);
-		// Pool 2 (leisure only) and Pool 3 (no sessions) are pruned from the payload
-		expect(locs.map((l) => l.id)).toEqual([1]);
+	});
+
+	it('keeps only the locations some session actually uses', () => {
+		const { locations: locs } = buildSchedule(dropin, locations, geojson);
+		// Pool 3 has no sessions of either kind, so it never reaches the client
+		expect(locs.map((l) => l.id)).toEqual([1, 2]);
 		expect(locs[0]).toMatchObject({ name: 'Pool 1', lat: 43.7, lng: -79.4 });
+	});
+
+	it('drops a location whose only sessions are filtered out', () => {
+		const preschoolOnly = [{ ...dropin[1], 'Course Title': 'Leisure Swim: Preschool', 'Age Max': '5' }];
+		const { sessions, locations: locs } = buildSchedule(preschoolOnly, locations, geojson);
+		expect(sessions).toEqual([]);
+		expect(locs).toEqual([]);
 	});
 });

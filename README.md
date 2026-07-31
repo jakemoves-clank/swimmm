@@ -24,8 +24,20 @@ Coordinates are joined by the shared Location ID, with a street-address
 fallback; one pool currently has no match in the city's geo data and is shown
 without a distance.
 
-"Adult lane swim" = drop-in swim rows whose title starts with "Lane Swim",
-excluding family sessions and anything with an age cap below 18.
+Swimmm lists two kinds of drop-in swim, switchable with the Lane/Leisure
+toggle (`?kind=leisure` deep-links to it). Both are baked into the same
+payload, so switching is a client-side filter and costs no request.
+
+The city publishes no "kind" column, so `swimKind` in
+`src/lib/server/transform.js` reads the section plus the course title: lane
+titles are consistently prefixed ("Lane Swim: Long Course (50m)"), while
+leisure is prefixed too except for "Adapted Leisure Swim", which qualifies the
+noun instead.
+
+"Adult" = no upper age bound, excluding family sessions. Every session the
+city leaves open to adults has no `Age Max`; the ones that set it are
+age-bracketed programs ("Leisure Swim: Preschool" at 5, "Leisure Swim: Youth"
+at 13–23) that an adult can't drop into.
 
 ## Travel times (optional)
 
@@ -83,3 +95,20 @@ Environment variables (build-time):
 Outbound fetches honour `HTTPS_PROXY`/`NO_PROXY` (via undici's
 `EnvHttpProxyAgent`), which matters in sandboxed/CI environments; with no proxy
 configured it behaves like plain `fetch`.
+
+E2e sessions are seeded around a fixed midday Toronto anchor and the tests pin
+the browser clock to it (`tests/e2e/fixture-time.js`), so the suite gives the
+same result whatever time it runs at.
+
+## CI
+
+`.github/workflows/tests.yml` runs the unit and e2e suites, **on demand only**
+— nothing runs on push, or when a pull request is opened or updated. Start it
+either way:
+
+- add the `run-tests` label to a pull request (remove and re-add to re-run);
+  the result attaches to the PR's checks
+- run it from the Actions tab against any branch
+
+The `run-tests` label has to exist in the repo before it can be applied; GitHub
+lets you create it inline the first time you add it.

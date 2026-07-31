@@ -13,6 +13,18 @@ export const DEFAULT_MAX_TRAVEL_MIN = 60;
 export const DEFAULT_MIN_SWIM_MIN = 30;
 export const LOCATION_GRID_DEG = 0.0005;
 
+// The two kinds of swim the city runs that an adult can just turn up to:
+// lane swim (lengths, in a lane) and leisure swim (open/unstructured). Also
+// the source of truth for `swimKind` in server/transform.js, so the payload
+// and the toggle can never drift apart.
+export const SWIM_KINDS = ['lane', 'leisure'];
+export const DEFAULT_SWIM_KIND = 'lane';
+
+export const SWIM_KIND_LABELS = { lane: 'Lane', leisure: 'Leisure' };
+
+// Used in prose ("No more adult lane swims today"), so lowercase.
+export const SWIM_KIND_NOUNS = { lane: 'lane swim', leisure: 'leisure swim' };
+
 export function snapToGrid(coords, grid = LOCATION_GRID_DEG) {
 	// Trim binary-float noise (43.653000000000006) at the grid's own
 	// precision, so a finer grid still lands on its own steps.
@@ -22,9 +34,11 @@ export function snapToGrid(coords, grid = LOCATION_GRID_DEG) {
 }
 
 // Where to send people when we have no data to show: the city's own public
-// lane swim schedule listing.
-export const CITY_LANE_SWIM_URL =
-	'https://www.toronto.ca/data/parks/prd/swimming/dropin/lane/index.html';
+// drop-in schedule listing, which it publishes per swim kind.
+export const CITY_SWIM_URLS = {
+	lane: 'https://www.toronto.ca/data/parks/prd/swimming/dropin/lane/index.html',
+	leisure: 'https://www.toronto.ca/data/parks/prd/swimming/dropin/leisure/index.html'
+};
 
 // Transit routing source: Transitous, a free community-run MOTIS API over
 // official agency GTFS feeds (TTC for Toronto). LOOKUP_LIMIT caps how many
@@ -63,4 +77,11 @@ export function maxTravelMin(searchParams) {
 // ?swim=20 → require at least 20 minutes in the pool
 export function minSwimMin(searchParams) {
 	return positive(searchParams, 'swim', DEFAULT_MIN_SWIM_MIN);
+}
+
+// ?kind=leisure → open on the leisure tab. Anything else falls back to lane
+// rather than erroring: a bad param should never cost someone the page.
+export function swimKindParam(searchParams) {
+	const v = searchParams?.get?.('kind');
+	return SWIM_KINDS.includes(v) ? v : DEFAULT_SWIM_KIND;
 }

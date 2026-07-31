@@ -1,16 +1,38 @@
 # Deployment notes
 
 Swimmm is a fully static site: the build fetches City of Toronto data once and
-bakes it into prerendered HTML (~30 KB gzipped). There is no server, no
+bakes it into prerendered HTML (~51 KB gzipped). There is no server, no
 database, and no API at runtime.
+
+That payload carries every lane and leisure session the city has published,
+not just today's — roughly six weeks ahead. It has to: deploys are gated on
+the city publishing new data, so the page must still be right on a day nobody
+rebuilt it. The lane/leisure toggle is therefore a client-side filter over
+data already in the page, and costs no request.
 
 ## GitHub Pages (current target)
 
 `.github/workflows/deploy.yml` handles everything:
 
 1. In repo Settings → Pages, set **Source: GitHub Actions**.
-2. Add an Actions **variable** `PUBLIC_MAPBOX_TOKEN` (it's a public token;
-   no secret needed).
+2. Add `PUBLIC_MAPBOX_TOKEN` under Settings → Secrets and variables → Actions
+   → **Variables**, scoped to the **repository**.
+
+   A variable rather than a secret because the token is public either way —
+   it's compiled into the bundle and served to every visitor, so a secret
+   would hide it from the Actions logs but not from View Source. The URL
+   restriction below is what actually protects it.
+
+   Repository- rather than environment-scoped because an environment variable
+   reaches only jobs that declare that environment, and the build job joins
+   none by design: it runs third-party code, so it stays least-privileged
+   (see the `permissions` notes in `deploy.yml`). Granting it the pages
+   environment just to read a token would undo that.
+
+   Without a token the site still builds and lists every swim — it just can't
+   show walk/bike/transit times or a top pick. The build warns rather than
+   failing, and each run's summary records `Travel times: on` or `off`, so
+   check there first if travel times go missing.
 3. Merge to `main`. Pushes deploy immediately; a daily cron checks the city's
    CKAN stamp against the deployed `stamp.txt` and rebuilds only when the city
    publishes new data (~weekly) — the site never contacts the city at runtime.
