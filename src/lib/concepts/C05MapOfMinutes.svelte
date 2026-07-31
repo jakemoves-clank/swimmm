@@ -147,8 +147,9 @@
 						tabindex="0"
 						aria-label="{d.pool.name}, {d.pool[mode]} minutes {mode === 'walk' ? 'on foot' : 'by bike'}"
 						onclick={() => (picked = d.pool.id)}
-						onkeydown={(e) => e.key === 'Enter' && (picked = d.pool.id)}
-					/>
+						onkeydown={(e) =>
+							(e.key === 'Enter' || e.key === ' ') && (e.preventDefault(), (picked = d.pool.id))
+						}
 				{/each}
 
 				<circle class="you" r="4" />
