@@ -165,9 +165,13 @@
 		<ol>
 			{#each CONCEPTS as c, i (c.slug)}
 				<li>
+					<!-- The nav is eleven numerals, which is all a screen reader would
+					     have to go on. The accessible name leads with the visible text
+					     so it still satisfies label-in-name, then says which one it is. -->
 					<button
 						class:current={c.slug === slug}
 						aria-current={c.slug === slug ? 'true' : undefined}
+						aria-label="{pad(i + 1)} — {c.title}"
 						title={c.title}
 						onclick={() => select(c.slug)}
 					>

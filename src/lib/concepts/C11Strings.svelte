@@ -8,6 +8,7 @@
 	import { scaleLinear } from 'd3-scale';
 	import { fmtClock, MODE_LABEL, SWIM_SCALE_CAP } from './model.js';
 	import KindToggle from './ui/KindToggle.svelte';
+	import { onActivate } from './ui/activate.js';
 
 	let { day, kind, setKind, travelSource } = $props();
 
@@ -148,7 +149,7 @@
 							t.swim.inWater
 						)}"
 						onclick={() => (picked = t.pool.id)}
-						onkeydown={(e) => e.key === 'Enter' && (picked = t.pool.id)}
+						onkeydown={onActivate(() => (picked = t.pool.id))}
 					/>
 				{/each}
 			</svg>

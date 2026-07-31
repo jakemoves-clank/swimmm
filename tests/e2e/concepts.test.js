@@ -44,9 +44,10 @@ function watchForErrors(page) {
 	return errors;
 }
 
-// The nav is eleven numerals, so that is what a click has to find.
-const navTo = (page, i) =>
-	page.getByRole('button', { name: String(i + 1).padStart(2, '0'), exact: true }).click();
+// The nav shows eleven numerals but is named "01 — The Trip Line" for screen
+// readers, so match on the numeral the reader sees plus the title it announces.
+const navName = (i) => `${String(i + 1).padStart(2, '0')} — ${CONCEPTS[i][1]}`;
+const navTo = (page, i) => page.getByRole('button', { name: navName(i), exact: true }).click();
 
 test('all eleven concepts draw, one after another, without throwing', async ({ page }) => {
 	const errors = watchForErrors(page);
@@ -73,7 +74,7 @@ test('a deep link opens straight onto its concept', async ({ page }) => {
 	await page.goto('/concepts?c=almanac');
 
 	await expect(page.getByRole('heading', { level: 2 })).toContainText('The Almanac');
-	await expect(page.getByRole('button', { name: '08', exact: true })).toHaveAttribute(
+	await expect(page.getByRole('button', { name: navName(7), exact: true })).toHaveAttribute(
 		'aria-current',
 		'true'
 	);

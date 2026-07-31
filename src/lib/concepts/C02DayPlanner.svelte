@@ -8,6 +8,7 @@
 	import { scaleLinear } from 'd3-scale';
 	import { fmtClock, fmtHour, MODE_LABEL } from './model.js';
 	import KindToggle from './ui/KindToggle.svelte';
+	import { onActivate } from './ui/activate.js';
 
 	let { day, kind, setKind, travelSource } = $props();
 
@@ -212,7 +213,7 @@
 						tabindex="0"
 						aria-label="{p.name}, {p.travelMin} minutes away"
 						onclick={() => (picked = p.next ?? null)}
-						onkeydown={(e) => e.key === 'Enter' && (picked = p.next ?? null)}
+						onkeydown={onActivate(() => (picked = p.next ?? null))}
 					/>
 				{/each}
 

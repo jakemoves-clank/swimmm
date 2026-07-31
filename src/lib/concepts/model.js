@@ -212,8 +212,11 @@ export function bestBet(day) {
 	return best;
 }
 
-// How many swims you could be in the water at, minute by minute, if you left
-// now — the "supply of swim" curve a couple of the concepts draw.
+// How many of `day.upcoming` have water in them at each step through the day —
+// the city's supply of swim, which is what the Almanac's masthead sparkline
+// draws. Deliberately *not* "what you could get to": it takes no account of
+// travel, and a caller who wants reachability has to filter `upcoming` before
+// passing it in.
 export function availabilityCurve(day, { step = 15, from = day.nowMin, to = 1440 } = {}) {
 	const out = [];
 	for (let t = Math.floor(from / step) * step; t <= to; t += step) {
