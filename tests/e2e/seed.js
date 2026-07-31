@@ -1,16 +1,21 @@
 // Writes a schedule fixture with two pools and both kinds of swim "today"
 // (Toronto time). The build consumes it via SWIMMM_DATA_FILE, so e2e runs
 // are deterministic and never contact the city.
+//
+// Session times are offsets from a fixed midday anchor rather than from the
+// real clock; the tests pin the browser to the same instant. See
+// fixture-time.js for why.
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { torontoNow } from '../../src/lib/time.js';
+import { ANCHOR_FILE, ANCHOR_MIN, anchorInstant } from './fixture-time.js';
 
 const OUT = 'tests/e2e/.tmp/schedule.json';
 
 rmSync('tests/e2e/.tmp', { recursive: true, force: true });
 mkdirSync('tests/e2e/.tmp', { recursive: true });
 
-const { date, minutes } = torontoNow();
-const clamp = (m) => Math.min(m, 1439);
+const { date } = torontoNow();
+const at = (offset) => ANCHOR_MIN + offset;
 
 // The test user (see e2e tests) is at 43.6600, -79.4000 — right beside Nearby
 // Pool. Faraway Pool is ~19 km away but its session starts sooner.
@@ -29,8 +34,8 @@ const schedule = {
 			kind: 'lane',
 			title: 'Lane Swim',
 			date,
-			start_min: clamp(minutes + 120),
-			end_min: clamp(minutes + 180)
+			start_min: at(120),
+			end_min: at(180)
 		},
 		{
 			location_id: 9002,
@@ -38,8 +43,8 @@ const schedule = {
 			kind: 'lane',
 			title: 'Lane Swim',
 			date,
-			start_min: clamp(minutes + 30),
-			end_min: clamp(minutes + 90)
+			start_min: at(30),
+			end_min: at(90)
 		},
 		// Leisure only at Nearby Pool, so the toggle visibly changes the list
 		// rather than just reordering it.
@@ -49,11 +54,12 @@ const schedule = {
 			kind: 'leisure',
 			title: 'Leisure Swim',
 			date,
-			start_min: clamp(minutes + 60),
-			end_min: clamp(minutes + 150)
+			start_min: at(60),
+			end_min: at(150)
 		}
 	]
 };
 
 writeFileSync(OUT, JSON.stringify(schedule));
-console.log(`seeded ${OUT} for ${date}`);
+writeFileSync(ANCHOR_FILE, JSON.stringify({ date, instant: anchorInstant(date).toISOString() }));
+console.log(`seeded ${OUT} for ${date} at anchor ${ANCHOR_MIN} min`);

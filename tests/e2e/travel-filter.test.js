@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { pinClock } from './fixture-time.js';
 
 // User feedback: "I only want to see swim sessions that I can actually get to."
 // Mapbox Matrix API is mocked; the seeded Faraway Pool is >60 min away by both
@@ -6,6 +7,10 @@ import { test, expect } from '@playwright/test';
 test.use({
 	geolocation: { latitude: 43.66, longitude: -79.4 }, // beside "Nearby Pool"
 	permissions: ['geolocation']
+});
+
+test.beforeEach(async ({ page }) => {
+	await pinClock(page);
 });
 
 test('filters out swims farther than the travel limit and shows walk/bike times', async ({

@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { pinClock } from './fixture-time.js';
 
 // The user story: someone who wants an open swim rather than lengths flips the
 // toggle and sees leisure sessions instead — and can link straight to that tab.
@@ -11,6 +12,7 @@ test.use({
 // Mapbox is unreachable in e2e, so the list shows straight-line distances and
 // nothing is filtered out — the same fallback the happy path covers.
 test.beforeEach(async ({ page }) => {
+	await pinClock(page);
 	await page.route('**/api.mapbox.com/**', (route) => route.abort());
 });
 

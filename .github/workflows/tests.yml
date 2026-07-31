@@ -1,0 +1,72 @@
+name: Tests
+
+# On demand only — nothing here runs on push, or when a PR is opened or
+# updated. Two ways to start it:
+#
+#   - add the `run-tests` label to a pull request (remove and re-add to
+#     re-run). This attaches the result to the PR's head commit, so it shows
+#     up in the PR's checks.
+#   - run it from the Actions tab against any branch (workflow_dispatch).
+#
+# `pull_request` rather than `issue_comment` because an issue_comment run is
+# not associated with the PR's head SHA, so it never appears as a check on the
+# PR. Labelling already requires write access, so it needs no extra gating.
+on:
+  workflow_dispatch:
+  pull_request:
+    types: [labeled]
+
+permissions: {}
+
+# A second label (or dispatch) supersedes a run still in flight.
+concurrency:
+  group: tests-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    # `labeled` fires for every label, so skip before a runner is allocated
+    # unless it was ours. workflow_dispatch always runs.
+    if: github.event_name != 'pull_request' || github.event.label.name == 'run-tests'
+    name: Unit and e2e
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # On a labelled PR the default checkout is the merge commit, which
+          # is what we want to test. Nothing here pushes, so don't leave the
+          # job's token where test code could read it.
+          persist-credentials: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      # Matches the deploy workflow: dependency lifecycle scripts are the
+      # usual foothold for a compromised package, and nothing here needs them.
+      # Playwright's browsers are installed explicitly below instead.
+      - run: npm ci --ignore-scripts
+
+      # Fast feedback first: if a unit test is broken there's no point paying
+      # for a browser download.
+      - name: Unit tests
+        run: npm test
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium webkit
+
+      # No network access needed: the e2e build reads SWIMMM_DATA_FILE (see
+      # playwright.config.js), so it never contacts the city.
+      - name: End-to-end tests
+        run: npm run test:e2e
+
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 7
