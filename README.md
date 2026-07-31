@@ -65,11 +65,70 @@ It's only queried when walking and biking both fail, capped at the
 stays between the browser and the routing providers. When every tier comes
 up empty, the page shows a desert.
 
+## Design studies — `/concepts`
+
+`/concepts` is a gallery of **eleven ways to draw the same question**: *which
+city pool has a swim today that I can actually get to, and how soon?* It is a
+studio wall, not a second product — the main page is untouched by it, and the
+route is a separate chunk, so none of d3 or the map data reaches `/`.
+
+| # | Concept | After | Touch |
+| --- | --- | --- | --- |
+| 01 | The Trip Line | Marey's train schedule graph | drag departure · kind |
+| 02 | The Day Planner | school timetable; Bertin's reorderable matrix | re-sort · kind |
+| 03 | The Pool Clock | the 24-hour dial | tap a ring · kind |
+| 04 | Swim Permitted Between | Sylianteng's parking signs | kind |
+| 05 | A Map of Minutes | time-space maps | walk/bike · tap a pool |
+| 06 | Your Pool | Voronoi tessellation; the choropleth | tap a territory · kind |
+| 07 | The Day in Twelve Maps | Tufte's small multiples | — |
+| 08 | The Almanac | Tufte's sparklines and table-graphics | sort · kind |
+| 09 | Soonest Splash | the dot strip / beeswarm | kind |
+| 10 | Worth the Trip | scatterplot with a reference line | walk/bike · kind |
+| 11 | Strings | the nomogram; parallel coordinates | tap a string · kind |
+
+Every concept gets **at most two things you can touch**, and each has its own
+palette so the forms can be compared rather than the styling.
+
+All eleven read one derived model (`src/lib/concepts/model.js`), so eleven very
+different pictures are provably drawing the same arithmetic. The quantity they
+all turn on is neither distance nor start time but the moment you could be *in
+the water*:
+
+```
+inWater = max(now + travel, session start)
+swimMin = session end − inWater
+```
+
+A swim counts as reachable when `swimMin ≥ DEFAULT_MIN_SWIM_MIN`. Pools the
+city never geocoded stay on the lists — Swimmm never hides a swim it can't
+assess — but can never be the *answer*, because we don't know how far they are.
+
+Two knobs, both announced on the page when they are in play:
+
+- `?c=<slug>` — deep-link a concept (the nav writes it as you browse)
+- `?at=13:00` — move the reader's clock. A gallery has to be legible at 2 a.m.
+  when every pool in Toronto is shut; without an override all eleven concepts
+  would draw an empty city. When nothing is left today and no `?at=` is given,
+  the page rehearses the day at 1 p.m. and says so in a banner.
+
+Without a Mapbox token the concepts fall back to straight-line estimates —
+4.8 km/h walking, 15 km/h cycling, ×4/π for the street grid (the average ratio
+of grid distance to straight-line distance) — and every concept's footer says
+"estimated" rather than dressing a guess up as a routed time.
+
+The map concepts draw on `src/lib/geo/torontoOutline.js`, the city boundary
+dissolved from the [Neighbourhoods](https://open.toronto.ca/dataset/neighbourhoods/)
+dataset and simplified to 839 points (~16 KB). Regenerate it with
+`node scripts/build-city-outline.mjs` — a hand-run script, not part of the
+build, since the municipal boundary changes about never.
+
 ## Privacy
 
 The browser asks for your location and uses it **only in the page**, snapped
 to a ~50 m grid before any routing provider sees it. There is no Swimmm
 server to send it to — the site is static files. There is no other user data.
+`/concepts` follows the same rule, and falls back to measuring from Nathan
+Phillips Square when you decline.
 
 ## Develop
 
