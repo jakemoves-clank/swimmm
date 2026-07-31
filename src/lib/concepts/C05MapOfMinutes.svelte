@@ -8,6 +8,7 @@
 	import { interpolateYlGnBu } from 'd3-scale-chromatic';
 	import { fmtClock, MODE_LABEL } from './model.js';
 	import KindToggle from './ui/KindToggle.svelte';
+	import { onActivate } from './ui/activate.js';
 
 	let { day, kind, setKind, travelSource } = $props();
 
@@ -147,9 +148,7 @@
 						tabindex="0"
 						aria-label="{d.pool.name}, {d.pool[mode]} minutes {mode === 'walk' ? 'on foot' : 'by bike'}"
 						onclick={() => (picked = d.pool.id)}
-						onkeydown={(e) =>
-							(e.key === 'Enter' || e.key === ' ') && (e.preventDefault(), (picked = d.pool.id))
-						}
+						onkeydown={onActivate(() => (picked = d.pool.id))}
 					/>
 				{/each}
 

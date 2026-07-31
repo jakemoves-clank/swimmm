@@ -13,6 +13,7 @@
 	import { TORONTO_OUTLINE } from '$lib/geo/torontoOutline.js';
 	import { fmtClock, fmtMinutes, MODE_LABEL } from './model.js';
 	import KindToggle from './ui/KindToggle.svelte';
+	import { onActivate } from './ui/activate.js';
 
 	let { day, kind, setKind, origin, travelSource } = $props();
 
@@ -153,7 +154,7 @@
 						tabindex="0"
 						aria-label={c.pool.name}
 						onclick={() => (picked = c.pool.id)}
-						onkeydown={(e) => e.key === 'Enter' && (picked = c.pool.id)}
+						onkeydown={onActivate(() => (picked = c.pool.id))}
 					/>
 				{/each}
 			</svg>

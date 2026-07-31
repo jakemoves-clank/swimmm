@@ -10,6 +10,7 @@ import {
 	fmtHour,
 	fmtMinutes
 } from '../../src/lib/concepts/model.js';
+import { onActivate } from '../../src/lib/concepts/ui/activate.js';
 
 const TODAY = '2026-07-31';
 const NOON = { date: TODAY, minutes: 720 };
@@ -287,5 +288,28 @@ describe('formatting', () => {
 		expect(fmtMinutes(60)).toBe('1 h');
 		expect(fmtMinutes(135)).toBe('2 h 15 min');
 		expect(fmtMinutes(null)).toBe('—');
+	});
+});
+
+describe('onActivate', () => {
+	const fire = (key) => {
+		let ran = 0;
+		let prevented = 0;
+		onActivate(() => ran++)({ key, preventDefault: () => prevented++ });
+		return { ran, prevented };
+	};
+
+	// An SVG shape with role="button" gets none of a real button's keyboard
+	// behaviour for free, and a keyboard user pressing Space on a focused
+	// control expects it to fire — not to scroll the page.
+	it('fires on Enter and on Space, and swallows the key', () => {
+		expect(fire('Enter')).toEqual({ ran: 1, prevented: 1 });
+		expect(fire(' ')).toEqual({ ran: 1, prevented: 1 });
+	});
+
+	it('leaves every other key alone, so arrows still page the gallery', () => {
+		for (const key of ['ArrowRight', 'ArrowLeft', 'Tab', 'a', 'Escape']) {
+			expect(fire(key), key).toEqual({ ran: 0, prevented: 0 });
+		}
 	});
 });
