@@ -5,6 +5,7 @@
 	import { pickTopResult } from '$lib/topResult.js';
 	import { fetchTransitTimes } from '$lib/transit.js';
 	import { variantLabel } from '$lib/labels.js';
+	import { haversineKm } from '$lib/geo/distance.js';
 	import {
 		maxTravelMin,
 		minSwimMin,
@@ -133,17 +134,6 @@
 			geoDenied = true;
 		}
 	});
-
-	function haversineKm(a, b) {
-		const R = 6371;
-		const toRad = (d) => (d * Math.PI) / 180;
-		const dLat = toRad(b.lat - a.lat);
-		const dLng = toRad(b.lng - a.lng);
-		const h =
-			Math.sin(dLat / 2) ** 2 +
-			Math.cos(toRad(a.lat)) * Math.cos(toRad(b.lat)) * Math.sin(dLng / 2) ** 2;
-		return 2 * R * Math.asin(Math.sqrt(h));
-	}
 
 	function fmtTime(min) {
 		let h = Math.floor(min / 60);
