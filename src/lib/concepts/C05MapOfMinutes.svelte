@@ -150,6 +150,7 @@
 						onkeydown={(e) =>
 							(e.key === 'Enter' || e.key === ' ') && (e.preventDefault(), (picked = d.pool.id))
 						}
+					/>
 				{/each}
 
 				<circle class="you" r="4" />
