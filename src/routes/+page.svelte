@@ -4,7 +4,19 @@
 	import { fetchTravelTimes, isReachable } from '$lib/travel.js';
 	import { pickTopResult } from '$lib/topResult.js';
 	import { fetchTransitTimes } from '$lib/transit.js';
-	import { maxTravelMin, minSwimMin, snapToGrid, TOP_RESULT, CITY_LANE_SWIM_URL } from '$lib/config.js';
+	import { variantLabel } from '$lib/labels.js';
+	import {
+		maxTravelMin,
+		minSwimMin,
+		swimKindParam,
+		snapToGrid,
+		TOP_RESULT,
+		CITY_SWIM_URLS,
+		SWIM_KINDS,
+		SWIM_KIND_LABELS,
+		SWIM_KIND_NOUNS,
+		DEFAULT_SWIM_KIND
+	} from '$lib/config.js';
 
 	let { data } = $props();
 
@@ -16,12 +28,14 @@
 	let sortBy = $state('soonest');
 	let travel = $state(null); // Map<location_id, {walk, bike}> once Mapbox responds
 	let limits = $state({ maxTravel: 60, minSwim: 30 });
+	let kind = $state(DEFAULT_SWIM_KIND); // 'lane' | 'leisure'
 
 	const mapboxToken = data.mapboxToken;
 
-	// Today's remaining sessions, joined to their pools, from the schedule
-	// baked in at build time.
-	const payload = $derived.by(() => {
+	// Everything still to come today, both kinds, joined to its pool. The
+	// toggle filters this rather than refetching: both kinds are baked into the
+	// same payload, so switching tabs costs no round trip.
+	const today = $derived.by(() => {
 		if (!now) return null;
 		const pools = new Map(data.schedule.locations.map((l) => [l.id, l]));
 		const sessions = data.schedule.sessions
@@ -45,10 +59,21 @@
 		};
 	});
 
+	const payload = $derived(
+		today ? { ...today, sessions: today.sessions.filter((s) => s.kind === kind) } : null
+	);
+
+	const otherKind = $derived(SWIM_KINDS.find((k) => k !== kind));
+	const otherKindCount = $derived(
+		today ? today.sessions.filter((s) => s.kind === otherKind).length : 0
+	);
+
+	// Fetched across *both* kinds' pools, so toggling never waits on Mapbox.
+	// One extra Matrix chunk or two at load beats a stall on every switch.
 	async function loadTravelTimes() {
-		if (!mapboxToken || !coords || !payload) return;
+		if (!mapboxToken || !coords || !today) return;
 		const seen = new Map();
-		for (const s of payload.sessions) {
+		for (const s of today.sessions) {
 			if (hasCoords(s) && !seen.has(s.location_id))
 				seen.set(s.location_id, { id: s.location_id, lat: s.lat, lng: s.lng });
 		}
@@ -60,9 +85,19 @@
 		}
 	}
 
+	function selectKind(k) {
+		kind = k;
+		// Keep the tab in the URL so a reload or a shared link lands on it.
+		const url = new URL(location.href);
+		if (k === DEFAULT_SWIM_KIND) url.searchParams.delete('kind');
+		else url.searchParams.set('kind', k);
+		history.replaceState(history.state, '', url);
+	}
+
 	onMount(() => {
 		const params = new URLSearchParams(location.search);
 		limits = { maxTravel: maxTravelMin(params), minSwim: minSwimMin(params) };
+		kind = swimKindParam(params);
 		now = torontoNow();
 
 		// GitHub Pages can't send X-Frame-Options, and CSP frame-ancestors is
@@ -152,6 +187,7 @@
 				km: coords && hasCoords(s) ? haversineKm(coords, { lat: s.lat, lng: s.lng }) : null,
 				travel: t,
 				travelLabel: travelLabel(t),
+				variant: variantLabel(s),
 				inProgress: s.start_min <= payload.now_min
 			};
 		});
@@ -174,7 +210,11 @@
 	// Top pick (and its dry-pool fallback) only exist once travel times are in —
 	// without them we can't honestly claim anything is "within a 15-min walk".
 	let transitTimes = $state(null); // Map<location_id, {minutes, connections}>
-	let transitTried = false;
+	// Per kind: each tab has its own candidate pools, so a lookup done for lane
+	// doesn't mean leisure has been tried. Times themselves are kind-agnostic
+	// (a pool is the same distance whatever swim is in it), so results merge
+	// into one map rather than replacing it.
+	const transitTriedFor = new Set();
 
 	const pickOpts = $derived({
 		nowMin: payload?.now_min,
@@ -188,9 +228,9 @@
 	// Transit is the last tier and costs one Transitous request per pool, so
 	// only look it up when walking and biking both fail to produce a pick.
 	$effect(() => {
-		if (!travel || !payload || !coords || transitTried) return;
+		if (!travel || !payload || !coords || transitTriedFor.has(kind)) return;
 		if (pickTopResult(sessions, { ...pickOpts, getTransit: () => null })) return;
-		transitTried = true;
+		transitTriedFor.add(kind);
 		const candidates = new Map();
 		for (const s of sessions) {
 			if (
@@ -205,7 +245,7 @@
 		fetchTransitTimes(coords, [...candidates.values()], {
 			maxConnections: TOP_RESULT.TRANSIT_MAX_CONNECTIONS
 		}).then(
-			(map) => (transitTimes = map),
+			(map) => (transitTimes = new Map([...(transitTimes ?? []), ...map])),
 			(e) => console.warn('transit times unavailable:', e.message)
 		);
 	});
@@ -222,21 +262,39 @@
 </script>
 
 <svelte:head>
-	<title>Swimmm — lane swim today in Toronto</title>
+	<title>Swimmm — {SWIM_KIND_NOUNS[kind]} today in Toronto</title>
 </svelte:head>
 
 <main>
 	<header>
 		<h1>Swimmm</h1>
-		<p class="tagline">Adult lane swim at City of Toronto pools — today</p>
+		<p class="tagline">Adult {SWIM_KIND_NOUNS[kind]} at City of Toronto pools — today</p>
 	</header>
+
+	<div class="kinds" role="group" aria-label="Swim type">
+		{#each SWIM_KINDS as k (k)}
+			<button class:active={kind === k} aria-pressed={kind === k} onclick={() => selectKind(k)}>
+				{SWIM_KIND_LABELS[k]}
+			</button>
+		{/each}
+	</div>
 
 	{#if !payload}
 		<p class="status">Loading today's swims…</p>
 	{:else if sessions.length === 0}
 		<p class="status">
-			No more adult lane swims today. Check back tomorrow morning, or see the
-			<a href={CITY_LANE_SWIM_URL}>city's lane swim schedules</a>.
+			No more adult {SWIM_KIND_NOUNS[kind]}s today.
+			{#if otherKindCount > 0}
+				There {otherKindCount === 1 ? 'is' : 'are'}
+				{otherKindCount}
+				{SWIM_KIND_NOUNS[otherKind]}{otherKindCount === 1 ? '' : 's'} left —
+				<button class="linklike" onclick={() => selectKind(otherKind)}>
+					switch to {SWIM_KIND_LABELS[otherKind]}
+				</button>.
+			{:else}
+				Check back tomorrow morning, or see the
+				<a href={CITY_SWIM_URLS[kind]}>city's {SWIM_KIND_NOUNS[kind]} schedules</a>.
+			{/if}
 		</p>
 	{:else}
 		{#if topPick}
@@ -315,7 +373,7 @@
 					</div>
 					<div class="row meta">
 						<span class="address">{s.address}</span>
-						{#if s.title !== 'Lane Swim'}<span class="variant">{s.title.replace('Lane Swim: ', '')}</span>{/if}
+						{#if s.variant}<span class="variant">{s.variant}</span>{/if}
 					</div>
 				</li>
 			{/each}
@@ -363,6 +421,43 @@
 	}
 	.status a {
 		color: #0b66e4;
+	}
+	/* A button that reads as a link: the empty state's "switch to Leisure"
+	   changes a tab rather than navigating, so it must not be an anchor. */
+	.linklike {
+		border: 0;
+		background: none;
+		padding: 0;
+		font: inherit;
+		color: #0b66e4;
+		text-decoration: underline;
+		cursor: pointer;
+	}
+	/* The primary mode switch, so it sits full-width above everything and is
+	   deliberately heavier than the Soonest/Closest control below it. */
+	.kinds {
+		display: flex;
+		gap: 0.25rem;
+		margin: 0.85rem 0 0.25rem;
+		padding: 0.2rem;
+		background: #e7e7e7;
+		border-radius: 999px;
+	}
+	.kinds button {
+		flex: 1;
+		border: 0;
+		border-radius: 999px;
+		background: transparent;
+		padding: 0.5rem 0.9rem;
+		font-size: 0.95rem;
+		font-weight: 600;
+		color: #555;
+		cursor: pointer;
+	}
+	.kinds button.active {
+		background: #fff;
+		color: #0b66e4;
+		box-shadow: 0 1px 3px rgb(0 0 0 / 0.16);
 	}
 	.controls {
 		display: flex;

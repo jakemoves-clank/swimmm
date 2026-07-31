@@ -1,4 +1,4 @@
-// Writes a schedule fixture with two pools and lane swim sessions "today"
+// Writes a schedule fixture with two pools and both kinds of swim "today"
 // (Toronto time). The build consumes it via SWIMMM_DATA_FILE, so e2e runs
 // are deterministic and never contact the city.
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
@@ -26,6 +26,7 @@ const schedule = {
 		{
 			location_id: 9001,
 			course_id: 1,
+			kind: 'lane',
 			title: 'Lane Swim',
 			date,
 			start_min: clamp(minutes + 120),
@@ -34,10 +35,22 @@ const schedule = {
 		{
 			location_id: 9002,
 			course_id: 2,
+			kind: 'lane',
 			title: 'Lane Swim',
 			date,
 			start_min: clamp(minutes + 30),
 			end_min: clamp(minutes + 90)
+		},
+		// Leisure only at Nearby Pool, so the toggle visibly changes the list
+		// rather than just reordering it.
+		{
+			location_id: 9001,
+			course_id: 3,
+			kind: 'leisure',
+			title: 'Leisure Swim',
+			date,
+			start_min: clamp(minutes + 60),
+			end_min: clamp(minutes + 150)
 		}
 	]
 };

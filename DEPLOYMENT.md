@@ -1,8 +1,14 @@
 # Deployment notes
 
 Swimmm is a fully static site: the build fetches City of Toronto data once and
-bakes it into prerendered HTML (~30 KB gzipped). There is no server, no
+bakes it into prerendered HTML (~51 KB gzipped). There is no server, no
 database, and no API at runtime.
+
+That payload carries every lane and leisure session the city has published,
+not just today's — roughly six weeks ahead. It has to: deploys are gated on
+the city publishing new data, so the page must still be right on a day nobody
+rebuilt it. The lane/leisure toggle is therefore a client-side filter over
+data already in the page, and costs no request.
 
 ## GitHub Pages (current target)
 

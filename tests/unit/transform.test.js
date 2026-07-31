@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { isAdultLaneSwim, toSession, buildLocations } from '../../src/lib/server/transform.js';
+import { swimKind, toSession, buildLocations } from '../../src/lib/server/transform.js';
 
 // Rows mirror the exact field names of the city's Drop-in.json
 function row(overrides = {}) {
@@ -23,34 +23,53 @@ function row(overrides = {}) {
 	};
 }
 
-describe('isAdultLaneSwim', () => {
-	it('accepts a plain Lane Swim open to all ages', () => {
-		expect(isAdultLaneSwim(row())).toBe(true);
+describe('swimKind', () => {
+	it('classifies a plain Lane Swim open to all ages', () => {
+		expect(swimKind(row())).toBe('lane');
 	});
 
-	it('accepts Lane Swim: Older Adult (adults can attend)', () => {
-		expect(isAdultLaneSwim(row({ 'Course Title': 'Lane Swim: Older Adult', 'Age Min': '60' }))).toBe(true);
+	it('classifies Lane Swim: Older Adult as lane (adults can attend)', () => {
+		expect(swimKind(row({ 'Course Title': 'Lane Swim: Older Adult', 'Age Min': '60' }))).toBe('lane');
 	});
 
-	it('accepts course-length variants like Lane Swim: Long Course (50m)', () => {
-		expect(isAdultLaneSwim(row({ 'Course Title': 'Lane Swim: Long Course (50m)' }))).toBe(true);
+	it('classifies course-length variants like Lane Swim: Long Course (50m)', () => {
+		expect(swimKind(row({ 'Course Title': 'Lane Swim: Long Course (50m)' }))).toBe('lane');
 	});
 
-	it('rejects non-lane swims', () => {
-		expect(isAdultLaneSwim(row({ 'Course Title': 'Leisure Swim' }))).toBe(false);
-		expect(isAdultLaneSwim(row({ 'Course Title': 'Aquatic Fitness: Shallow' }))).toBe(false);
+	it('classifies leisure swim and its suffixed variants', () => {
+		expect(swimKind(row({ 'Course Title': 'Leisure Swim' }))).toBe('leisure');
+		expect(swimKind(row({ 'Course Title': 'Leisure Swim: Adult', 'Age Min': '18' }))).toBe('leisure');
+		expect(swimKind(row({ 'Course Title': 'Leisure Swim (Women)' }))).toBe('leisure');
+		expect(swimKind(row({ 'Course Title': 'Leisure Swim - Outdoor Pool' }))).toBe('leisure');
+	});
+
+	it('classifies Adapted Leisure Swim, which qualifies rather than prefixes', () => {
+		expect(swimKind(row({ 'Course Title': 'Adapted Leisure Swim' }))).toBe('leisure');
+	});
+
+	it('rejects swims that are neither lane nor leisure', () => {
+		expect(swimKind(row({ 'Course Title': 'Aquatic Fitness: Shallow' }))).toBeNull();
+		expect(swimKind(row({ 'Course Title': 'Water Play' }))).toBeNull();
+		expect(swimKind(row({ 'Course Title': 'Youth Lifeguard Club' }))).toBeNull();
+		expect(swimKind(row({ 'Course Title': 'City Camp Swim' }))).toBeNull();
 	});
 
 	it('rejects rows outside the swim drop-in section', () => {
-		expect(isAdultLaneSwim(row({ Section: 'Sports - Drop-In', 'Course Title': 'Lane Swim' }))).toBe(false);
+		expect(swimKind(row({ Section: 'Sports - Drop-In', 'Course Title': 'Lane Swim' }))).toBeNull();
 	});
 
-	it('rejects family lane swim (not an adult session)', () => {
-		expect(isAdultLaneSwim(row({ 'Course Title': 'Lane Swim: Family' }))).toBe(false);
+	it('rejects family swims of either kind (not adult sessions)', () => {
+		expect(swimKind(row({ 'Course Title': 'Lane Swim: Family' }))).toBeNull();
+		expect(swimKind(row({ 'Course Title': 'Leisure Swim: Family' }))).toBeNull();
 	});
 
-	it('rejects sessions with an age cap below adulthood', () => {
-		expect(isAdultLaneSwim(row({ 'Age Max': '17' }))).toBe(false);
+	it('rejects age-bracketed sessions an adult cannot drop into', () => {
+		// The cap is the signal, whatever it is: preschool (5), youth (23).
+		expect(swimKind(row({ 'Course Title': 'Leisure Swim: Preschool', 'Age Max': '5' }))).toBeNull();
+		expect(
+			swimKind(row({ 'Course Title': 'Leisure Swim: Youth', 'Age Min': '13', 'Age Max': '23' }))
+		).toBeNull();
+		expect(swimKind(row({ 'Age Max': '17' }))).toBeNull();
 	});
 });
 
@@ -59,11 +78,16 @@ describe('toSession', () => {
 		expect(toSession(row())).toEqual({
 			location_id: 1098,
 			course_id: 158568,
+			kind: 'lane',
 			title: 'Lane Swim',
 			date: '2026-07-24',
 			start_min: 19 * 60 + 15,
 			end_min: 21 * 60
 		});
+	});
+
+	it('carries the kind so the client can filter without re-parsing titles', () => {
+		expect(toSession(row({ 'Course Title': 'Leisure Swim' })).kind).toBe('leisure');
 	});
 });
 
