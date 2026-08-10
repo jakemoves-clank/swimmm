@@ -16,6 +16,9 @@ mkdirSync('tests/e2e/.tmp', { recursive: true });
 
 const { date } = torontoNow();
 const at = (offset) => ANCHOR_MIN + offset;
+// The city's dates are plain Toronto days, so step one in UTC to avoid a
+// daylight-saving boundary moving it.
+const tomorrow = new Date(Date.parse(`${date}T00:00:00Z`) + 86_400_000).toISOString().slice(0, 10);
 
 // The test user (see e2e tests) is at 43.6600, -79.4000 — right beside Nearby
 // Pool. Faraway Pool is ~19 km away but its session starts sooner.
@@ -56,6 +59,18 @@ const schedule = {
 			date,
 			start_min: at(60),
 			end_min: at(150)
+		},
+		// Tomorrow morning at Nearby Pool. Nothing in the "today" tests can
+		// see it, but it gives the planner somewhere to roll forward to when
+		// the clock is wound past tonight's last swim.
+		{
+			location_id: 9001,
+			course_id: 4,
+			kind: 'lane',
+			title: 'Lane Swim',
+			date: tomorrow,
+			start_min: 9 * 60,
+			end_min: 11 * 60
 		}
 	]
 };

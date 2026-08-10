@@ -152,3 +152,53 @@ export function buildDips(schedule, { now, travel, kind, preferredMin }) {
 export function offerDips(schedule, opts) {
 	return selectDips(rankDips(buildDips(schedule, opts)), opts);
 }
+
+// How many days ahead the concierge will look before admitting defeat. The
+// city publishes a rolling window of a few weeks, and an offer eight days
+// out isn't an offer — but a long weekend can shut the pools for three days
+// running, so a week is the honest reach.
+const DEFAULT_MAX_DAYS_AHEAD = 7;
+
+function daysBetween(fromDate, toDate) {
+	const day = 86_400_000;
+	return Math.round((Date.parse(`${toDate}T00:00:00Z`) - Date.parse(`${fromDate}T00:00:00Z`)) / day);
+}
+
+/**
+ * The day the planner should be showing, and its dips.
+ *
+ * Today, whenever today still has water you could get to. Otherwise the next
+ * day that does — which covers the three cases that all look the same to a
+ * reader and quite different to the code:
+ *
+ *   11 p.m.  today's swims are over → offer tomorrow's
+ *    2 a.m.  today's swims haven't happened yet → offer today's
+ *   holiday  the city runs nothing at all → skip the day entirely
+ *
+ * A day whose swims exist but are all out of reach is skipped too: from the
+ * reader's side, a pool they can't get to and a pool that's shut are the
+ * same day off.
+ *
+ * @returns { date, nowMin, dips, isToday, daysAhead }
+ */
+export function planDay(schedule, opts) {
+	const { now, maxDaysAhead = DEFAULT_MAX_DAYS_AHEAD } = opts;
+
+	const dates = [...new Set((schedule.sessions ?? []).map((s) => s.date))]
+		.filter((d) => d >= now.date && daysBetween(now.date, d) <= maxDaysAhead)
+		.sort();
+
+	for (const date of dates) {
+		const isToday = date === now.date;
+		// On a later day nothing has happened yet, so the whole day is ahead
+		// of you and the clock starts at midnight.
+		const nowMin = isToday ? now.minutes : 0;
+		const dips = offerDips(schedule, { ...opts, now: { date, minutes: nowMin } });
+		if (dips.length) {
+			return { date, nowMin, dips, isToday, daysAhead: daysBetween(now.date, date) };
+		}
+	}
+
+	// Nothing within reach all week. The page says so; it doesn't pretend.
+	return { date: now.date, nowMin: now.minutes, dips: [], isToday: true, daysAhead: 0 };
+}

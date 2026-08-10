@@ -55,8 +55,19 @@ describe('planSpan', () => {
 		expect(planSpan([running, dip(800, 845)], 600)).toEqual([540, 900]);
 	});
 
-	it('starts at now when now is earlier than the first departure', () => {
-		expect(planSpan([dip(800, 845)], 610)).toEqual([600, 900]);
+	it('starts at now when now is nearly time to set off', () => {
+		expect(planSpan([dip(800, 845)], 750)).toEqual([720, 900]);
+	});
+
+	// Asked at 2 a.m. about a 2 p.m. swim, an axis anchored on "now" would be
+	// twelve hours of empty page. It leads in by an hour and no more.
+	it('does not draw half a night of empty axis to reach the first dip', () => {
+		expect(planSpan([dip(840, 885)], 120)).toEqual([720, 900]);
+	});
+
+	// A planner showing tomorrow has no "now" on it at all.
+	it('spans the dips alone when the day being shown is not today', () => {
+		expect(planSpan([dip(600, 645), dip(800, 845)], null)).toEqual([540, 900]);
 	});
 
 	// A planner with no height is a broken-looking page, so an empty day

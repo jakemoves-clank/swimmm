@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildDip, buildDips, fitDuration, offerDips } from '../../src/lib/dip.js';
+import { buildDip, buildDips, fitDuration, offerDips, planDay } from '../../src/lib/dip.js';
 import { DEFAULT_DIP_DURATION_MIN, DIP_SELECTION } from '../../src/lib/config.js';
 
 const POOL = { id: 1, name: 'Regent Park', address: '640 Dundas St E', lat: 43.66, lng: -79.36 };
@@ -176,5 +176,82 @@ describe('offerDips', () => {
 		expect(offered).toHaveLength(DIP_SELECTION.COUNT);
 		expect(offered.map((d) => d.start_min)).toEqual([...offered.map((d) => d.start_min)].sort((a, b) => a - b));
 		expect(offered[0].appeal.score).toBeGreaterThan(0);
+	});
+});
+
+// Which day the planner should be showing. A concierge asked at 11 p.m.
+// should be offering tomorrow, not shrugging; asked at 2 a.m. it should
+// still be offering the day that is about to start.
+describe('planDay', () => {
+	const pool = { id: 1, name: 'Regent Park', address: '640 Dundas St E', lat: 43.66, lng: -79.36 };
+	const travel = new Map([[1, { walk: 10, bike: 4, drive: 6 }]]);
+	const swim = (date, start, end, course_id) => ({
+		location_id: 1,
+		course_id,
+		kind: 'lane',
+		title: 'Lane Swim',
+		date,
+		start_min: start,
+		end_min: end
+	});
+	// Monday is a holiday: the city runs nothing at all.
+	const schedule = {
+		locations: [pool],
+		sessions: [
+			swim('2026-08-09', 840, 960, 1), // Sunday afternoon
+			swim('2026-08-11', 600, 720, 2), // Tuesday morning
+			swim('2026-08-12', 1080, 1200, 3) // Wednesday evening
+		]
+	};
+	const plan = (date, minutes) =>
+		planDay(schedule, { now: { date, minutes }, travel, kind: 'lane', preferredMin: 45 });
+
+	it('shows today while today still has water in it', () => {
+		const p = plan('2026-08-09', 600);
+		expect(p).toMatchObject({ date: '2026-08-09', isToday: true, daysAhead: 0 });
+		expect(p.dips).toHaveLength(1);
+	});
+
+	it('rolls on to the next day once tonight is over', () => {
+		const p = plan('2026-08-09', 1380); // 11 p.m., the pool shut hours ago
+		expect(p).toMatchObject({ date: '2026-08-11', isToday: false, daysAhead: 2 });
+		expect(p.dips[0].start_min).toBe(600);
+	});
+
+	// Nothing has happened yet at 2 a.m. — the day's swims are all ahead of
+	// you, and a planner that rolled to tomorrow would be a day out.
+	it('still offers today when asked in the small hours', () => {
+		const p = plan('2026-08-09', 120);
+		expect(p).toMatchObject({ date: '2026-08-09', isToday: true });
+		expect(p.dips[0].start_min).toBe(840);
+	});
+
+	it('skips a day the city has closed entirely', () => {
+		const p = plan('2026-08-10', 540); // the holiday Monday: no sessions at all
+		expect(p).toMatchObject({ date: '2026-08-11', daysAhead: 1 });
+	});
+
+	// A day with sessions you could never get to is as good as a shut day.
+	it('skips a day whose swims are all out of reach', () => {
+		const faraway = new Map([[1, { walk: 90, bike: 60, drive: 40 }]]);
+		const p = planDay(schedule, {
+			now: { date: '2026-08-09', minutes: 600 },
+			travel: faraway,
+			kind: 'lane',
+			preferredMin: 45
+		});
+		expect(p.dips).toEqual([]);
+		expect(p.isToday).toBe(true);
+	});
+
+	it('does not wander further ahead than it was asked to look', () => {
+		const p = planDay(schedule, {
+			now: { date: '2026-08-09', minutes: 1380 },
+			travel,
+			kind: 'lane',
+			preferredMin: 45,
+			maxDaysAhead: 1
+		});
+		expect(p.dips).toEqual([]);
 	});
 });

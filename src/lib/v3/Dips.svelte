@@ -13,8 +13,9 @@
 	import { torontoNow } from '$lib/time.js';
 	import { fetchTravelTimesFor } from '$lib/travel.js';
 	import { fetchTransitTimes } from '$lib/transit.js';
-	import { offerDips } from '$lib/dip.js';
+	import { planDay } from '$lib/dip.js';
 	import { MODES, modeRule } from '$lib/appeal.js';
+	import { dayLabel } from '$lib/labels.js';
 	import DayPlanner from './DayPlanner.svelte';
 	import {
 		dipDurationMin,
@@ -60,18 +61,22 @@
 		return merged;
 	});
 
-	const offer = $derived(
+	// The day worth showing, which is usually today but is tomorrow at 11 p.m.
+	// and Tuesday on a holiday Monday — see planDay.
+	const plan = $derived(
 		now && travelWithTransit
-			? offerDips(data.schedule, { now, travel: travelWithTransit, kind, preferredMin })
+			? planDay(data.schedule, { now, travel: travelWithTransit, kind, preferredMin })
 			: null
 	);
+	const offer = $derived(plan?.dips ?? null);
+	const whichDay = $derived(plan && now ? dayLabel(plan.date, now.date) : '');
 
 	// Sessions we had to leave out because the city never gave their pool a
 	// coordinate. Reported rather than silently dropped: v1's promise was
 	// never to hide a swim it couldn't assess, and v3 keeps the spirit of it
 	// even though it can't offer them as dips.
 	const unplacedCount = $derived.by(() => {
-		if (!now) return 0;
+		if (!plan) return 0;
 		const unplaced = new Set(
 			(data.schedule.locations ?? [])
 				.filter((l) => !Number.isFinite(l.lat) || !Number.isFinite(l.lng))
@@ -79,9 +84,9 @@
 		);
 		return (data.schedule.sessions ?? []).filter(
 			(s) =>
-				s.date === now.date &&
+				s.date === plan.date &&
 				s.kind === kind &&
-				s.end_min > now.minutes &&
+				s.end_min > plan.nowMin &&
 				unplaced.has(s.location_id)
 		).length;
 	});
@@ -121,14 +126,16 @@
 	const transitTriedFor = new Set();
 
 	$effect(() => {
-		if (!travel || !now || !offer || transitTriedFor.has(kind)) return;
-		if (offer.length >= DIP_SELECTION.COUNT) return;
+		if (!travel || !plan || transitTriedFor.has(kind)) return;
+		if (plan.dips.length >= DIP_SELECTION.COUNT) return;
 		transitTriedFor.add(kind);
 
-		const offered = new Set(offer.map((d) => d.location.id));
+		// Candidates come from the day the planner settled on, not from today:
+		// on a holiday Monday the pools worth a transit lookup are Tuesday's.
+		const offered = new Set(plan.dips.map((d) => d.location.id));
 		const live = new Set(
 			(data.schedule.sessions ?? [])
-				.filter((s) => s.date === now.date && s.kind === kind && s.end_min > now.minutes)
+				.filter((s) => s.date === plan.date && s.kind === kind && s.end_min > plan.nowMin)
 				.map((s) => s.location_id)
 		);
 		const candidates = poolsWithCoords().filter((p) => live.has(p.id) && !offered.has(p.id));
@@ -205,14 +212,14 @@
 </script>
 
 <svelte:head>
-	<title>Swimmm — a dip today in Toronto</title>
+	<title>Swimmm — a dip in Toronto</title>
 </svelte:head>
 
 <main>
 	<header>
 		<h1>Swimmm</h1>
 		<p class="tagline">
-			A few dips you could take today — adult {SWIM_KIND_NOUNS[kind]} at City of Toronto pools
+			A few dips you could take — adult {SWIM_KIND_NOUNS[kind]} at City of Toronto pools
 		</p>
 	</header>
 
@@ -245,7 +252,7 @@
 		<p class="status">Finding you a dip…</p>
 	{:else if offer.length === 0}
 		<p class="status">
-			No {SWIM_KIND_NOUNS[kind]} within easy reach for the rest of today — nothing inside a
+			No {SWIM_KIND_NOUNS[kind]} within easy reach in the next week — nothing inside a
 			{modeRule('walk').MAX_MIN} min walk, {modeRule('bike').MAX_MIN} min ride, or
 			{modeRule('drive').MAX_MIN} min drive with time for a dip.
 			<button class="linklike" onclick={() => selectKind(otherKind)}>
@@ -256,9 +263,19 @@
 	{:else}
 		<p class="count">
 			{offer.length}
-			{offer.length === 1 ? 'dip' : 'dips'} for the rest of today
+			{offer.length === 1 ? 'dip' : 'dips'}
+			<!-- Named, because it isn't always today: at eleven at night, or on a
+			     holiday Monday with every pool shut, the planner has moved on to
+			     the next day that has water in it. -->
+			{plan.isToday ? 'for the rest of today' : whichDay}
 		</p>
-		<DayPlanner dips={offer} nowMin={now.minutes} {fmtTime} />
+		{#if !plan.isToday}
+			<p class="note">
+				Nothing left {plan.daysAhead === 1 ? 'today' : 'between now and then'}, so this is
+				{whichDay}.
+			</p>
+		{/if}
+		<DayPlanner dips={offer} nowMin={plan.isToday ? plan.nowMin : null} {fmtTime} />
 		{#if unplacedCount > 0}
 			<p class="note">
 				{unplacedCount}

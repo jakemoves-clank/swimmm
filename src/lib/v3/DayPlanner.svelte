@@ -16,6 +16,8 @@
 	import { layoutDips, planSpan } from './layout.js';
 	import { travelPhrase } from '$lib/labels.js';
 
+	// nowMin is null when the planner is showing a day that isn't today: there
+	// is no "now" on tomorrow, and nothing on it is in progress or late.
 	let { dips, nowMin, fmtTime } = $props();
 
 	// Two pixels a minute: a 30-minute dip — the shortest we offer — is 60px,
@@ -36,7 +38,7 @@
 	const hours = $derived.by(() => {
 		const out = [];
 		for (let t = span[0]; t <= span[1]; t += 60) {
-			if (Math.abs(t - nowMin) < LABEL_CLEARANCE_MIN) continue;
+			if (nowMin != null && Math.abs(t - nowMin) < LABEL_CLEARANCE_MIN) continue;
 			out.push(t);
 		}
 		return out;
@@ -60,7 +62,7 @@
 		{/each}
 	</div>
 
-	{#if nowMin >= span[0] && nowMin <= span[1]}
+	{#if nowMin != null && nowMin >= span[0] && nowMin <= span[1]}
 		<div class="now" style="top: {y(nowMin)}px" aria-hidden="true">
 			<span class="nowlabel">now</span>
 			<span class="nowrule"></span>
@@ -96,7 +98,9 @@
 						<span class="dur">{dip.durationMin} min</span>
 					</p>
 					<p class="trip">
-						{dip.leaveBy <= nowMin ? 'leave now' : `leave ${fmtTime(dip.leaveBy)}`} ·
+						{nowMin != null && dip.leaveBy <= nowMin
+							? 'leave now'
+							: `leave ${fmtTime(dip.leaveBy)}`} ·
 						{travelPhrase(dip.mode, dip.travelMin)}
 					</p>
 					{#if dip.session.variant || dip.shortfallMin > 0}

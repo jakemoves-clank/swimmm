@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { dipSummary, travelPhrase, variantLabel } from '../../src/lib/labels.js';
+import { dayLabel, dipSummary, travelPhrase, variantLabel } from '../../src/lib/labels.js';
 
 // Titles below are real values from the city's Drop-in.json.
 const s = (kind, title) => ({ kind, title });
@@ -55,5 +55,30 @@ describe('dipSummary', () => {
 		expect(dipSummary({ mode: 'walk', travelMin: 10, durationMin: 45 })).toBe(
 			'45-min dip, 10-min walk away'
 		);
+	});
+});
+
+describe('dayLabel', () => {
+	it('names the near days the way a person would', () => {
+		expect(dayLabel('2026-08-10', '2026-08-10')).toBe('today');
+		expect(dayLabel('2026-08-11', '2026-08-10')).toBe('tomorrow');
+	});
+
+	it('falls back to the weekday once "tomorrow" stops being useful', () => {
+		expect(dayLabel('2026-08-13', '2026-08-10')).toBe('Thursday');
+	});
+
+	// Six days out there is only one Sunday to mean. A week out the weekday
+	// has come round to today's again, so it has to carry a date.
+	it('adds the date once the weekday alone would be ambiguous', () => {
+		expect(dayLabel('2026-08-16', '2026-08-10')).toBe('Sunday');
+		expect(dayLabel('2026-08-17', '2026-08-10')).toBe('Monday 17 August');
+	});
+
+	// The city's dates are already Toronto days; a browser in Auckland must
+	// not read them as the day before.
+	it('names the day the date string means, whatever zone the browser is in', () => {
+		expect(dayLabel('2026-08-09', '2026-08-09')).toBe('today');
+		expect(dayLabel('2026-08-15', '2026-08-10')).toBe('Saturday');
 	});
 });

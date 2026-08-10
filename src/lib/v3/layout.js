@@ -52,12 +52,28 @@ export function layoutDips(dips) {
 	return laid;
 }
 
-// The stretch of day the planner draws, rounded out to whole hours so the
-// axis labels land on the hour. Starts at the earliest thing the reader has
-// to act on — the first departure, or now — and ends when the last dip does.
+// How much empty axis the planner will draw before the first departure, to
+// show you where "now" sits relative to it. Beyond an hour it stops being
+// context and starts being scrolling: asked at 2 a.m. about a 2 p.m. swim,
+// an axis anchored on now would be twelve hours of blank page.
+const LEAD_IN_MIN = 60;
+
+/**
+ * The stretch of day the planner draws, rounded out to whole hours so the
+ * axis labels land on the hour.
+ *
+ * @param nowMin  minutes since midnight, or null when the planner is showing
+ *                a day that isn't today and so has no "now" on it.
+ */
 export function planSpan(dips, nowMin) {
-	const starts = dips.map((d) => Math.min(d.leaveBy, d.start_min));
-	const from = Math.floor(Math.min(nowMin, ...starts) / 60) * 60;
-	if (!dips.length) return [from, from + 60];
-	return [from, Math.ceil(Math.max(...dips.map((d) => d.end_min)) / 60) * 60];
+	if (!dips.length) {
+		const from = Math.floor((nowMin ?? 0) / 60) * 60;
+		return [from, from + 60];
+	}
+	const first = Math.min(...dips.map((d) => Math.min(d.leaveBy, d.start_min)));
+	const from = nowMin == null ? first : Math.max(first - LEAD_IN_MIN, Math.min(nowMin, first));
+	return [
+		Math.floor(from / 60) * 60,
+		Math.ceil(Math.max(...dips.map((d) => d.end_min)) / 60) * 60
+	];
 }

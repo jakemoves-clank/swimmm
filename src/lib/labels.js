@@ -36,3 +36,17 @@ export function travelPhrase(mode, minutes) {
 export function dipSummary(dip) {
 	return `${dip.durationMin}-min dip, ${travelPhrase(dip.mode, dip.travelMin)} away`;
 }
+
+// Which day the planner is showing, as a person would say it. Dates are the
+// city's own 'YYYY-MM-DD' strings; they're parsed as UTC and formatted as
+// UTC so the label names the day the string means, whatever zone the
+// browser is in — the string is already a Toronto day.
+export function dayLabel(date, today) {
+	const days = Math.round((Date.parse(`${date}T00:00:00Z`) - Date.parse(`${today}T00:00:00Z`)) / 86_400_000);
+	if (days <= 0) return 'today';
+	if (days === 1) return 'tomorrow';
+	const fmt = (opts) => new Intl.DateTimeFormat('en-GB', { timeZone: 'UTC', ...opts }).format(new Date(`${date}T00:00:00Z`));
+	// Inside the week a weekday is unambiguous and reads best; beyond it,
+	// "Sunday" could be either of two Sundays, so the date comes too.
+	return days < 7 ? fmt({ weekday: 'long' }) : fmt({ weekday: 'long', day: 'numeric', month: 'long' });
+}

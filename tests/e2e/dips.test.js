@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { pinClock } from './fixture-time.js';
+import { anchorInstant, pinClock, readAnchor } from './fixture-time.js';
 
 // v3's user story: a person opens Swimmm and is offered a few dips they
 // could actually take today — each one an appointment (leave at, in the
@@ -117,4 +117,41 @@ test('places a dip on the day where it actually falls', async ({ page }) => {
 	const [nowBox, dipBox] = [await nowLine.boundingBox(), await dip.boundingBox()];
 	expect(dipBox.y).toBeGreaterThan(nowBox.y);
 	await expect(page.locator('.hour')).not.toHaveCount(0);
+});
+
+// A concierge asked at eleven at night should be offering tomorrow, not
+// shrugging. Same machinery covers a holiday Monday with every pool shut and
+// the small hours before anything has opened — see planDay.
+test('rolls on to the next day once tonight has nothing left', async ({ page }) => {
+	// 11:30 p.m.: today's seeded swims finished hours ago, but Nearby Pool
+	// runs a 9–11 a.m. lane swim tomorrow.
+	const anchor = readAnchor();
+	const lateNight = new Date(
+		anchorInstant(anchor.date).getTime() + (23 * 60 + 30 - 720) * 60_000
+	);
+	await page.clock.setFixedTime(lateNight);
+	await page.goto('/');
+
+	await expect(page.getByText(/dip.*tomorrow/)).toBeVisible();
+	const dip = page.locator('.dip').first();
+	await expect(dip).toContainText('Nearby Pool');
+	await expect(dip).toContainText('9:00 a.m.–9:45 a.m.');
+	// Tomorrow has no "now" on it, so the planner draws no now line.
+	await expect(page.locator('.now')).toHaveCount(0);
+});
+
+// The general rule is "before anything has opened", not a hardcoded hour:
+// today's swims are all still ahead of the clock, so today is the answer.
+test('still offers today when asked before any pool has opened', async ({ page }) => {
+	const anchor = readAnchor();
+	const smallHours = new Date(anchorInstant(anchor.date).getTime() + (3 * 60 - 720) * 60_000);
+	await page.clock.setFixedTime(smallHours);
+	await page.goto('/');
+
+	await expect(page.getByText(/for the rest of today/)).toBeVisible();
+	await expect(page.locator('.dip').first()).toContainText('2:00 p.m.–2:45 p.m.');
+	// The axis leads in from an hour before the 1:50 p.m. departure, rather
+	// than drawing ten hours of empty night from 3 a.m. to get there.
+	await expect(page.locator('.hour').first()).toContainText('12pm');
+	await expect(page.getByText('3am', { exact: true })).toHaveCount(0);
 });
