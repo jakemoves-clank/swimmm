@@ -15,7 +15,7 @@
 	import { fetchTransitTimes } from '$lib/transit.js';
 	import { offerDips } from '$lib/dip.js';
 	import { MODES, modeRule } from '$lib/appeal.js';
-	import { travelPhrase } from '$lib/labels.js';
+	import DayPlanner from './DayPlanner.svelte';
 	import {
 		dipDurationMin,
 		swimKindParam,
@@ -202,9 +202,6 @@
 		return `${h}:${String(m).padStart(2, '0')} ${ampm}`;
 	}
 
-	// "leave now" is the honest reading when the session is already running
-	// and you're close enough that the clock has passed your departure.
-	const leaveLabel = (dip) => (dip.leaveBy <= (now?.minutes ?? 0) ? 'leave now' : `leave ${fmtTime(dip.leaveBy)}`);
 </script>
 
 <svelte:head>
@@ -261,33 +258,7 @@
 			{offer.length}
 			{offer.length === 1 ? 'dip' : 'dips'} for the rest of today
 		</p>
-		<ul class="dips">
-			{#each offer as dip (dip.id)}
-				<li class="card" class:in-progress={dip.inProgress}>
-					<div class="row">
-						<span class="pool">{dip.location.name}</span>
-						<span class="travel">{travelPhrase(dip.mode, dip.travelMin)}</span>
-					</div>
-					<div class="row">
-						<span class="water">
-							{fmtTime(dip.start_min)}–{fmtTime(dip.end_min)}
-							<span class="dur">{dip.durationMin} min</span>
-						</span>
-						<span class="leave">{leaveLabel(dip)}</span>
-					</div>
-					<div class="row meta">
-						<span class="address">{dip.location.address}</span>
-						{#if dip.session.variant}<span class="variant">{dip.session.variant}</span>{/if}
-					</div>
-					{#if dip.shortfallMin > 0}
-						<p class="short">
-							{dip.durationMin} min rather than {dip.preferredMin} — the {SWIM_KIND_NOUNS[kind]}
-							ends at {fmtTime(dip.session.end_min)}.
-						</p>
-					{/if}
-				</li>
-			{/each}
-		</ul>
+		<DayPlanner dips={offer} nowMin={now.minutes} {fmtTime} />
 		{#if unplacedCount > 0}
 			<p class="note">
 				{unplacedCount}
@@ -386,72 +357,6 @@
 		font-size: 0.8rem;
 		color: #777;
 		margin: 0.5rem 0 0.75rem;
-	}
-	.dips {
-		list-style: none;
-		margin: 0;
-		padding: 0;
-		display: flex;
-		flex-direction: column;
-		gap: 0.5rem;
-	}
-	.card {
-		background: #fff;
-		border: 1px solid #e0e0e0;
-		border-radius: 0.6rem;
-		padding: 0.7rem 0.85rem;
-	}
-	.card.in-progress {
-		border-left: 4px solid #0b66e4;
-	}
-	.row {
-		display: flex;
-		justify-content: space-between;
-		align-items: baseline;
-		gap: 0.5rem;
-	}
-	.pool {
-		font-weight: 600;
-	}
-	.travel {
-		color: #0b66e4;
-		font-weight: 600;
-		font-size: 0.9rem;
-		white-space: nowrap;
-	}
-	.water {
-		font-size: 0.95rem;
-		color: #333;
-	}
-	.dur {
-		color: #777;
-		font-size: 0.8rem;
-		margin-left: 0.3rem;
-	}
-	.leave {
-		font-size: 0.8rem;
-		color: #555;
-		white-space: nowrap;
-	}
-	.meta {
-		margin-top: 0.15rem;
-	}
-	.address {
-		font-size: 0.8rem;
-		color: #777;
-	}
-	.variant {
-		font-size: 0.75rem;
-		color: #555;
-		background: #eee;
-		border-radius: 0.3rem;
-		padding: 0.1rem 0.4rem;
-		white-space: nowrap;
-	}
-	.short {
-		font-size: 0.75rem;
-		color: #777;
-		margin: 0.35rem 0 0;
 	}
 	footer {
 		margin-top: 1.5rem;

@@ -47,7 +47,7 @@ test('offers a dip as an appointment: when to leave, when you are in the water',
 }) => {
 	await page.goto('/');
 
-	const dip = page.locator('.card').first();
+	const dip = page.locator('.dip').first();
 	await expect(dip).toContainText('Nearby Pool');
 	// The default 45-minute dip inside the 2–3 p.m. lane swim.
 	await expect(dip).toContainText('2:00 p.m.–2:45 p.m.');
@@ -59,14 +59,14 @@ test('offers a dip as an appointment: when to leave, when you are in the water',
 test('offers nothing at a pool no mode can reach in time', async ({ page }) => {
 	await page.goto('/');
 
-	await expect(page.locator('.card')).toHaveCount(1);
+	await expect(page.locator('.dip')).toHaveCount(1);
 	await expect(page.getByText('Faraway Pool')).toHaveCount(0);
 });
 
 test('?dip=30 books a shorter window in the same water', async ({ page }) => {
 	await page.goto('/?dip=30');
 
-	const dip = page.locator('.card').first();
+	const dip = page.locator('.dip').first();
 	await expect(dip).toContainText('2:00 p.m.–2:30 p.m.');
 	await expect(dip).toContainText('30 min');
 });
@@ -75,18 +75,18 @@ test('the lane/leisure toggle changes what you are offered, and rides in the URL
 	page
 }) => {
 	await page.goto('/');
-	await expect(page.locator('.card').first()).toContainText('2:00 p.m.–2:45 p.m.');
+	await expect(page.locator('.dip').first()).toContainText('2:00 p.m.–2:45 p.m.');
 
 	await page.getByRole('button', { name: 'Leisure' }).click();
 	// Leisure at Nearby Pool runs 1–2:30 p.m., so the dip starts an hour earlier.
-	await expect(page.locator('.card').first()).toContainText('1:00 p.m.–1:45 p.m.');
+	await expect(page.locator('.dip').first()).toContainText('1:00 p.m.–1:45 p.m.');
 	await expect(page).toHaveURL(/kind=leisure/);
 });
 
 test('/v3 is the same page as the root, not a copy that can drift', async ({ page }) => {
 	await page.goto('/v3');
 
-	const dip = page.locator('.card').first();
+	const dip = page.locator('.dip').first();
 	await expect(dip).toContainText('Nearby Pool');
 	await expect(dip).toContainText('2:00 p.m.–2:45 p.m.');
 	await expect(dip).toContainText('leave 1:50 p.m.');
@@ -100,5 +100,21 @@ test('says so plainly when it cannot work out a trip at all', async ({ page }) =
 	await page.goto('/');
 
 	await expect(page.getByText(/Travel times are unavailable/)).toBeVisible();
-	await expect(page.locator('.card')).toHaveCount(0);
+	await expect(page.locator('.dip')).toHaveCount(0);
+});
+
+// The planner's whole claim is that distance down the page is time. If that
+// stops being true it is a list with decoration, so the axis gets a test.
+test('places a dip on the day where it actually falls', async ({ page }) => {
+	await page.goto('/');
+
+	const nowLine = page.locator('.now');
+	const dip = page.locator('.slot').first();
+	await expect(nowLine).toBeVisible();
+
+	// The seeded dip is two hours after the pinned clock, so it must sit
+	// below the now line, and the hour axis must be drawn around it.
+	const [nowBox, dipBox] = [await nowLine.boundingBox(), await dip.boundingBox()];
+	expect(dipBox.y).toBeGreaterThan(nowBox.y);
+	await expect(page.locator('.hour')).not.toHaveCount(0);
 });
