@@ -14,7 +14,7 @@
 	// here is real text a screen reader can read and a thumb can hit, and
 	// there are five of them, not sixty.
 	import { layoutDips, planSpan } from './layout.js';
-	import { travelPhrase } from '$lib/labels.js';
+	import { reachPhrase } from '$lib/labels.js';
 
 	// nowMin is null when the planner is showing a day that isn't today: there
 	// is no "now" on tomorrow, and nothing on it is in progress or late.
@@ -74,6 +74,7 @@
 			<li
 				class="slot"
 				class:in-progress={dip.inProgress}
+				class:unrouted={!dip.routed}
 				style="top: {y(dip.start_min)}px; height: {(dip.end_min - dip.start_min) *
 					PX_PER_MIN}px; left: calc({(lane / lanes) * 100}% + {lane ? 0.25 : 0}rem); width: calc({(1 /
 					lanes) *
@@ -83,13 +84,15 @@
 				     from when you'd leave to when you'd be in the water. It is
 				     the thing a wall calendar can't tell you, and the reason a
 				     dip is an appointment rather than an opening time. -->
-				<span
-					class="shadow"
-					style="top: {(dip.leaveBy - dip.start_min) * PX_PER_MIN}px; height: {(dip.start_min -
-						dip.leaveBy) *
-						PX_PER_MIN}px"
-					aria-hidden="true"
-				></span>
+				{#if dip.routed}
+					<span
+						class="shadow"
+						style="top: {(dip.leaveBy - dip.start_min) * PX_PER_MIN}px; height: {(dip.start_min -
+							dip.leaveBy) *
+							PX_PER_MIN}px"
+						aria-hidden="true"
+					></span>
+				{/if}
 
 				<article class="dip">
 					<h3>{dip.location.name}</h3>
@@ -98,10 +101,12 @@
 						<span class="dur">{dip.durationMin} min</span>
 					</p>
 					<p class="trip">
-						{nowMin != null && dip.leaveBy <= nowMin
-							? 'leave now'
-							: `leave ${fmtTime(dip.leaveBy)}`} ·
-						{travelPhrase(dip.mode, dip.travelMin)}
+						{#if dip.routed}
+							{nowMin != null && dip.leaveBy <= nowMin
+								? 'leave now'
+								: `leave ${fmtTime(dip.leaveBy)}`} ·
+						{/if}
+						{reachPhrase(dip)}
 					</p>
 					{#if dip.session.variant || dip.shortfallMin > 0}
 						<p class="aside">
@@ -204,6 +209,15 @@
 			#dbe3ec 0 1px,
 			transparent 1px 5px
 		);
+	}
+	/* No routed trip: a dashed edge and a muted rule, so a distance-only dip
+	   never passes for one we worked the journey out for. */
+	.slot.unrouted .dip {
+		border-left-style: dashed;
+		border-left-color: #9bb0c7;
+	}
+	.slot.unrouted .trip {
+		color: #5d6b7a;
 	}
 	.dip {
 		position: relative;

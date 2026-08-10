@@ -64,19 +64,43 @@ export function pickMode(times) {
 	return null;
 }
 
+/**
+ * How you'd reach this pool, if we can offer it at all.
+ *
+ * A routed trip whenever we have one; otherwise the straight-line distance,
+ * which is honest about being a distance rather than dressing itself up as a
+ * departure time. Null when neither is good enough to offer.
+ *
+ * @param times  { walk, bike, drive, transit } minutes, any of them null
+ * @param km     straight-line distance from the origin, or null
+ */
+export function pickReach(times, km) {
+	const routed = pickMode(times);
+	if (routed) return { routed: true, ...routed };
+	if (km != null && km <= APPEAL.DISTANCE.MAX_KM) return { routed: false, km };
+	return null;
+}
+
 // Each term reads a dip and returns points. Add one here to teach the
 // concierge a new consideration; everything downstream picks it up.
 const TERMS = [
-	// Which way you'd get there. The dominant term by design.
+	// Which way you'd get there. The dominant term by design. A dip with no
+	// routed trip scores the DISTANCE base, which sits below every mode.
 	{
 		name: 'mode',
-		points: (dip) => modeRule(dip.mode)?.BASE ?? 0
+		points: (dip) => (dip.routed ? (modeRule(dip.mode)?.BASE ?? 0) : APPEAL.DISTANCE.BASE)
 	},
-	// Where in its mode's range the trip falls: at the threshold this is
-	// worth nothing, on your doorstep it's worth the full weight.
+	// Where in its range the trip falls: at the limit this is worth nothing,
+	// on your doorstep it's worth the full weight. The limit is the mode's
+	// threshold in minutes, or — with no routed trip — MAX_KM of straight line.
 	{
 		name: 'proximity',
 		points: (dip) => {
+			if (!dip.routed) {
+				if (dip.km == null) return 0;
+				const room = Math.max(0, APPEAL.DISTANCE.MAX_KM - dip.km);
+				return (room / APPEAL.DISTANCE.MAX_KM) * APPEAL.DISTANCE.PROXIMITY_WEIGHT;
+			}
 			const rule = modeRule(dip.mode);
 			if (!rule || dip.travelMin == null) return 0;
 			const room = Math.max(0, rule.MAX_MIN - dip.travelMin);
@@ -96,11 +120,11 @@ export function scoreDip(dip) {
 	return { score: terms.reduce((sum, t) => sum + t.points, 0), terms };
 }
 
-// Appealing dips, best first, with their scoring attached. A dip whose mode
-// never qualified isn't ranked low — it isn't on offer at all.
+// Appealing dips, best first, with their scoring attached. A dip we could
+// neither route nor measure isn't ranked low — it isn't on offer at all.
 export function rankDips(dips) {
 	return dips
-		.filter((d) => modeRule(d.mode))
+		.filter((d) => (d.routed ? modeRule(d.mode) : d.km != null))
 		.map((d) => ({ ...d, appeal: scoreDip(d) }))
 		.sort((a, b) => b.appeal.score - a.appeal.score || a.start_min - b.start_min);
 }

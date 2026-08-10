@@ -23,7 +23,8 @@ import {
 	DIP_DURATION_OPTIONS,
 	DIP_START_STEP_MIN
 } from './config.js';
-import { pickMode, rankDips, selectDips } from './appeal.js';
+import { pickReach, rankDips, selectDips } from './appeal.js';
+import { haversineKm } from './geo/distance.js';
 import { variantLabel } from './labels.js';
 
 // The longest offerable length that is no longer than `preferred` and fits
@@ -46,21 +47,34 @@ function roundUpTo(min, step) {
  *
  * @param session    an annotated session ({ start_min, end_min, kind, … })
  * @param location   the pool ({ id, name, address, lat, lng })
- * @param travel     { mode, minutes } — one-way, from a routing provider
+ * @param reach      how you'd get there, from appeal.js pickReach:
+ *                   { routed: true, mode, minutes } — a routed trip, or
+ *                   { routed: false, km } — a straight line and nothing more
  * @param opts.nowMin     minutes since midnight, Toronto
  * @param opts.preferredMin  the user's chosen dip length
  */
 export function buildDip(
 	session,
 	location,
-	travel,
+	reach,
 	{ nowMin, preferredMin = DEFAULT_DIP_DURATION_MIN }
 ) {
-	if (!travel || travel.minutes == null) return null;
+	if (!reach) return null;
+	const routed = reach.routed === true;
+	if (routed && reach.minutes == null) return null;
+	if (!routed && reach.km == null) return null;
 
 	// The earliest you could be wet: either the water opens and you're already
-	// there, or you're still walking when it does.
-	const earliest = Math.max(nowMin + travel.minutes, session.start_min);
+	// there, or you're still travelling when it does.
+	//
+	// With no routed trip there is no "still travelling" to reckon with — we
+	// don't know how long you'd take and won't guess — so the dip is simply
+	// the front of the water you could still use. The reader does the last
+	// step themselves, which is the honest division of labour when we can't
+	// do it for them.
+	const earliest = routed
+		? Math.max(nowMin + reach.minutes, session.start_min)
+		: Math.max(nowMin, session.start_min);
 	const start = roundUpTo(earliest, DIP_START_STEP_MIN);
 	const durationMin = fitDuration(session.end_min - start, preferredMin);
 	if (durationMin == null) return null;
@@ -77,12 +91,18 @@ export function buildDip(
 			lat: location.lat,
 			lng: location.lng
 		},
-		mode: travel.mode,
-		travelMin: travel.minutes,
+		// True when a routing provider worked this out; false when all we have
+		// is the straight line. Every consumer has to face the difference —
+		// hence a flag rather than a null to overlook.
+		routed,
+		mode: routed ? reach.mode : null,
+		travelMin: routed ? reach.minutes : null,
+		km: routed ? (reach.km ?? null) : reach.km,
 		// The number that turns a listing into an appointment. Can be in the
 		// past when the session is already running and you're close enough to
-		// have made it — the UI reads that as "leave now".
-		leaveBy: start - travel.minutes,
+		// have made it — the UI reads that as "leave now". Null with no routed
+		// trip: we will not put a time on a journey we haven't measured.
+		leaveBy: routed ? start - reach.minutes : null,
 		start_min: start,
 		end_min: start + durationMin,
 		durationMin,
@@ -125,9 +145,17 @@ export function buildDip(
  * @param opts.kind  'lane' | 'leisure'
  * @param opts.preferredMin  the user's chosen dip length
  */
-export function buildDips(schedule, { now, travel, kind, preferredMin }) {
+export function buildDips(schedule, { now, travel, origin, kind, preferredMin }) {
 	const pools = new Map((schedule.locations ?? []).map((l) => [l.id, l]));
 	const dips = [];
+	// One haversine per pool rather than one per session: a pool with six
+	// sessions is the same distance away all six times.
+	const distances = new Map();
+	const kmTo = (pool) => {
+		if (!origin || !Number.isFinite(pool.lat) || !Number.isFinite(pool.lng)) return null;
+		if (!distances.has(pool.id)) distances.set(pool.id, haversineKm(origin, pool));
+		return distances.get(pool.id);
+	};
 
 	for (const session of schedule.sessions ?? []) {
 		if (session.date !== now.date) continue;
@@ -137,10 +165,10 @@ export function buildDips(schedule, { now, travel, kind, preferredMin }) {
 		const pool = pools.get(session.location_id);
 		if (!pool) continue;
 
-		const chosen = pickMode(travel?.get(session.location_id));
-		if (!chosen) continue;
+		const reach = pickReach(travel?.get(session.location_id), kmTo(pool));
+		if (!reach) continue;
 
-		const dip = buildDip(session, pool, chosen, { nowMin: now.minutes, preferredMin });
+		const dip = buildDip(session, pool, reach, { nowMin: now.minutes, preferredMin });
 		if (dip) dips.push(dip);
 	}
 	return dips;

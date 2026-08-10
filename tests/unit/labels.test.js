@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { dayLabel, dipSummary, travelPhrase, variantLabel } from '../../src/lib/labels.js';
+import { dayLabel, dipSummary, reachPhrase, travelPhrase, variantLabel } from '../../src/lib/labels.js';
 
 // Titles below are real values from the city's Drop-in.json.
 const s = (kind, title) => ({ kind, title });
@@ -80,5 +80,18 @@ describe('dayLabel', () => {
 	it('names the day the date string means, whatever zone the browser is in', () => {
 		expect(dayLabel('2026-08-09', '2026-08-09')).toBe('today');
 		expect(dayLabel('2026-08-15', '2026-08-10')).toBe('Saturday');
+	});
+});
+
+describe('reachPhrase', () => {
+	it('names the trip when we routed one', () => {
+		expect(reachPhrase({ routed: true, mode: 'bike', travelMin: 12 })).toBe('12-min ride');
+	});
+
+	// No routed trip: say how far, and let the reader judge the trip. Never
+	// dress a straight line up as a journey time.
+	it('gives the distance, as the crow flies, when we did not', () => {
+		expect(reachPhrase({ routed: false, km: 2.34 })).toBe('2.3 km away');
+		expect(reachPhrase({ routed: false, km: 12.4 })).toBe('12 km away');
 	});
 });

@@ -92,7 +92,21 @@ export const APPEAL = {
 	// Per minute short of the dip length you asked for. A 45 cut to 30 costs
 	// 9 points — enough to lose to a closer pool of the same mode, never
 	// enough to lose to a slower mode.
-	SHORTFALL_PENALTY_PER_MIN: 0.6
+	SHORTFALL_PENALTY_PER_MIN: 0.6,
+
+	// When nothing could be routed — no Mapbox token, Mapbox unreachable, or
+	// one pool it couldn't find a road to — we fall back to the one number we
+	// can work out on the device: the straight line. We still refuse to turn
+	// that into a departure time (an estimated "leave at 1:40" is how you
+	// miss a swim), so a distance-only dip simply has no trip on it and says
+	// how far away the pool is instead.
+	//
+	// BASE is 0 against the routed modes' 40–160, which puts every
+	// distance-only dip below every routed one. That is the intended reading:
+	// prefer what we can vouch for. MAX_KM is what we'll offer at all without
+	// knowing how you'd travel — roughly a comfortable ride, and beyond a
+	// walk — since the mode thresholds can't be applied to a line on a map.
+	DISTANCE: { MAX_KM: 5, BASE: 0, PROXIMITY_WEIGHT: 15 }
 };
 
 // Turning a ranked list of dips into the handful actually offered.

@@ -50,3 +50,13 @@ export function dayLabel(date, today) {
 	// "Sunday" could be either of two Sundays, so the date comes too.
 	return days < 7 ? fmt({ weekday: 'long' }) : fmt({ weekday: 'long', day: 'numeric', month: 'long' });
 }
+
+// How far away the pool is, in whichever terms we can honestly offer: the
+// routed trip if we have one, otherwise the straight-line distance, said as
+// a distance. A dip that couldn't be routed has no journey time and must
+// never look as though it does.
+export function reachPhrase(dip) {
+	if (dip.routed) return travelPhrase(dip.mode, dip.travelMin);
+	if (dip.km == null) return '';
+	return `${dip.km < 10 ? dip.km.toFixed(1) : Math.round(dip.km)} km away`;
+}

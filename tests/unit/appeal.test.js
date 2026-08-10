@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { modeRule, pickMode, scoreDip, rankDips, selectDips } from '../../src/lib/appeal.js';
+import { modeRule, pickMode, pickReach, scoreDip, rankDips, selectDips } from '../../src/lib/appeal.js';
 import { DIP_SELECTION } from '../../src/lib/config.js';
 
 // Travel times as the page has them: minutes per mode, transit carrying its
@@ -9,6 +9,7 @@ const times = (over = {}) => ({ walk: null, bike: null, drive: null, transit: nu
 
 let seq = 0;
 const dip = (over = {}) => ({
+	routed: true,
 	id: `d${seq++}`,
 	location: { id: 1, name: 'Regent Park' },
 	mode: 'walk',
@@ -149,5 +150,57 @@ describe('selectDips', () => {
 	it('hands back the dips in the order the day runs, not in score order', () => {
 		const picked = selectDips(rankDips([at(1020, { travelMin: 3 }), at(600, { travelMin: 12 })]));
 		expect(picked.map((d) => d.start_min)).toEqual([600, 1020]);
+	});
+});
+
+// When routing is unavailable we do not invent a travel time — we fall back
+// to the one thing we can compute ourselves, the straight-line distance, and
+// say so. A distance is honest; an estimated departure time is not.
+describe('pickReach', () => {
+	it('prefers a routed trip whenever we have one', () => {
+		expect(pickReach(times({ walk: 12 }), 0.9)).toEqual({ routed: true, mode: 'walk', minutes: 12 });
+	});
+
+	it('falls back to the distance when no mode could be routed', () => {
+		expect(pickReach(times(), 2.4)).toEqual({ routed: false, km: 2.4 });
+	});
+
+	// A pool Mapbox couldn't route (an island, a bad coordinate) still has a
+	// distance, and a distance is better than dropping it silently.
+	it('falls back for one unroutable pool even while others routed fine', () => {
+		expect(pickReach(times({ walk: null, bike: null, drive: null }), 3)).toEqual({
+			routed: false,
+			km: 3
+		});
+	});
+
+	it('will not offer a pool beyond the distance we would vouch for', () => {
+		expect(pickReach(times(), 40)).toBeNull();
+	});
+
+	it('offers nothing when a routed trip failed and we have no distance either', () => {
+		expect(pickReach(times({ walk: 90 }), null)).toBeNull();
+	});
+});
+
+describe('scoreDip, without a routed time', () => {
+	const far = (km) => dip({ routed: false, mode: null, travelMin: null, km });
+
+	// Everything routed is something we can vouch for; a distance is not. So
+	// even the worst qualifying drive outranks the closest pool we could only
+	// measure as the crow flies.
+	it('ranks any routed dip above any distance-only one', () => {
+		const drive = scoreDip(dip({ mode: 'drive', travelMin: 20, shortfallMin: 30, preferredMin: 60, durationMin: 30 }));
+		expect(scoreDip(far(0.2)).score).toBeLessThan(drive.score);
+	});
+
+	it('still prefers the nearer of two distance-only pools', () => {
+		expect(scoreDip(far(1)).score).toBeGreaterThan(scoreDip(far(4)).score);
+	});
+
+	it('keeps distance-only dips in the ranking rather than dropping them', () => {
+		const ranked = rankDips([far(3), dip({ mode: 'walk', travelMin: 5 })]);
+		expect(ranked).toHaveLength(2);
+		expect(ranked[0].mode).toBe('walk');
 	});
 });

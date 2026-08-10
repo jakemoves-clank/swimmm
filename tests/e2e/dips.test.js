@@ -92,15 +92,20 @@ test('/v3 is the same page as the root, not a copy that can drift', async ({ pag
 	await expect(dip).toContainText('leave 1:50 p.m.');
 });
 
-test('says so plainly when it cannot work out a trip at all', async ({ page }) => {
-	// A dip without a routed travel time is just a listing, so v3 declines to
-	// guess — it never dresses a straight-line estimate up as an offer.
+test('degrades to distances, saying so, when it cannot route a trip', async ({ page }) => {
+	// Routing gone. We still know where the reader is and where the pools
+	// are, so the offer stands — but with the distance in place of a journey
+	// time, and no departure time, because we will not guess one.
 	await page.unroute('**/api.mapbox.com/directions-matrix/**');
 	await page.route('**/api.mapbox.com/**', (route) => route.abort());
 	await page.goto('/');
 
-	await expect(page.getByText(/Travel times are unavailable/)).toBeVisible();
-	await expect(page.locator('.dip')).toHaveCount(0);
+	const dip = page.locator('.dip').first();
+	await expect(dip).toContainText('Nearby Pool');
+	await expect(dip).toContainText('2:00 p.m.–2:45 p.m.');
+	await expect(dip).toContainText('km away');
+	await expect(dip).not.toContainText('leave');
+	await expect(page.getByText(/straight-line distances/)).toBeVisible();
 });
 
 // The planner's whole claim is that distance down the page is time. If that

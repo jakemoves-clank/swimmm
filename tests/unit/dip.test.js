@@ -14,8 +14,14 @@ const session = (over = {}) => ({
 	...over
 });
 
+// Reach as appeal.js pickReach hands it over: a routed trip, or a bare
+// straight-line distance when nothing could be routed.
 const dip = (session_, travel, over = {}) =>
-	buildDip(session_, POOL, travel, { nowMin: NOW, preferredMin: 45, ...over });
+	buildDip(session_, POOL, travel && { routed: true, ...travel }, {
+		nowMin: NOW,
+		preferredMin: 45,
+		...over
+	});
 
 describe('fitDuration', () => {
 	it('gives you the length you asked for when the session has room', () => {
@@ -86,7 +92,7 @@ describe('buildDip', () => {
 	});
 
 	it('defaults to the configured dip length', () => {
-		const d = buildDip(session(), POOL, { mode: 'walk', minutes: 20 }, { nowMin: NOW });
+		const d = buildDip(session(), POOL, { routed: true, mode: 'walk', minutes: 20 }, { nowMin: NOW });
 		expect(d.preferredMin).toBe(DEFAULT_DIP_DURATION_MIN);
 	});
 });
@@ -253,5 +259,78 @@ describe('planDay', () => {
 			maxDaysAhead: 1
 		});
 		expect(p.dips).toEqual([]);
+	});
+});
+
+// With no routed trip we still offer the swim — we just stop pretending to
+// know when you'd have to leave for it.
+describe('buildDip, without a routed trip', () => {
+	const far = (session_, km) =>
+		buildDip(session_, POOL, { routed: false, km }, { nowMin: NOW, preferredMin: 45 });
+
+	it('offers the front of the water, with no departure time attached', () => {
+		const d = far(session(), 2.4);
+		expect(d).toMatchObject({
+			routed: false,
+			mode: null,
+			travelMin: null,
+			leaveBy: null,
+			km: 2.4,
+			start_min: 840,
+			end_min: 885
+		});
+	});
+
+	it('starts from now when the session is already running', () => {
+		const d = far(session({ start_min: 700, end_min: 960 }), 1.2);
+		expect(d.start_min).toBe(780);
+	});
+
+	it('still shortens the dip when the water is nearly gone', () => {
+		const d = far(session({ start_min: 700, end_min: 820 }), 1.2);
+		expect(d).toMatchObject({ durationMin: 30, shortfallMin: 15 });
+	});
+});
+
+describe('buildDips, without routing', () => {
+	const schedule = {
+		locations: [
+			{ id: 1, name: 'Near', address: '1 St', lat: 43.66, lng: -79.4 },
+			{ id: 2, name: 'Far', address: '2 St', lat: 43.805, lng: -79.19 },
+			{ id: 3, name: 'Unplaced', address: '3 St', lat: null, lng: null }
+		],
+		sessions: [1, 2, 3].map((id) => ({
+			location_id: id,
+			course_id: id,
+			kind: 'lane',
+			title: 'Lane Swim',
+			date: 'today',
+			start_min: 840,
+			end_min: 960
+		}))
+	};
+	const opts = {
+		now: { date: 'today', minutes: NOW },
+		travel: null,
+		origin: { lat: 43.66, lng: -79.4 },
+		kind: 'lane',
+		preferredMin: 45
+	};
+
+	it('falls back to distances for every pool it can measure', () => {
+		const dips = buildDips(schedule, opts);
+		expect(dips.map((d) => d.location.name)).toEqual(['Near']);
+		expect(dips[0].routed).toBe(false);
+		expect(dips[0].km).toBeCloseTo(0, 1);
+	});
+
+	// An unplaced pool has no distance either, so the fallback doesn't rescue
+	// it — there is genuinely nothing we can say about how far away it is.
+	it('still cannot offer a pool the city never geocoded', () => {
+		expect(buildDips(schedule, opts).some((d) => d.location.id === 3)).toBe(false);
+	});
+
+	it('has nothing to offer at all when it does not know where you are', () => {
+		expect(buildDips(schedule, { ...opts, origin: null })).toEqual([]);
 	});
 });

@@ -63,11 +63,26 @@
 
 	// The day worth showing, which is usually today but is tomorrow at 11 p.m.
 	// and Tuesday on a holiday Monday — see planDay.
+	// Routing is preferred but no longer required: once we know where you are
+	// we can always fall back to straight-line distances, which appeal.js
+	// scores below every routed trip and the planner draws without a
+	// departure time. `routingDone` is what we wait for — either times
+	// arrived or the attempt failed — so the page doesn't flash a degraded
+	// offer while Mapbox is still answering.
+	const routingDone = $derived(travel != null || travelFailed);
 	const plan = $derived(
-		now && travelWithTransit
-			? planDay(data.schedule, { now, travel: travelWithTransit, kind, preferredMin })
+		now && origin && routingDone
+			? planDay(data.schedule, {
+					now,
+					travel: travelWithTransit,
+					origin,
+					kind,
+					preferredMin
+				})
 			: null
 	);
+	// True when the offer on screen is distances rather than routed trips.
+	const degraded = $derived(!!plan?.dips.length && plan.dips.every((d) => !d.routed));
 	const offer = $derived(plan?.dips ?? null);
 	const whichDay = $derived(plan && now ? dayLabel(plan.date, now.date) : '');
 
@@ -243,12 +258,7 @@
 		</p>
 	{/if}
 
-	{#if travelFailed}
-		<p class="status">
-			Travel times are unavailable right now, and a dip without one is just a listing — see the
-			<a href={CITY_SWIM_URLS[kind]}>city's {SWIM_KIND_NOUNS[kind]} schedules</a>.
-		</p>
-	{:else if !offer}
+	{#if !offer}
 		<p class="status">Finding you a dip…</p>
 	{:else if offer.length === 0}
 		<p class="status">
@@ -269,6 +279,12 @@
 			     the next day that has water in it. -->
 			{plan.isToday ? 'for the rest of today' : whichDay}
 		</p>
+		{#if degraded}
+			<p class="note">
+				We couldn't work out journey times just now, so these are straight-line distances — how
+				long they take is your call.
+			</p>
+		{/if}
 		{#if !plan.isToday}
 			<p class="note">
 				Nothing left {plan.daysAhead === 1 ? 'today' : 'between now and then'}, so this is
