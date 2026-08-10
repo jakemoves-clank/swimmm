@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { anchorInstant, pinClock, readAnchor } from './fixture-time.js';
+import { anchorInstant, pinClock, readAnchor } from '../fixture-time.js';
 
 // The gallery at /v2 draws the same day eleven ways. What matters in
 // e2e is that all eleven actually render against real payload shapes — several

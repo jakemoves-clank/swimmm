@@ -1,10 +1,10 @@
 <script>
 	import { onMount } from 'svelte';
 	import { base } from '$app/paths';
-	import { torontoNow } from '$lib/time.js';
-	import { fetchTravelTimes } from '$lib/travel.js';
-	import { buildDay, clockOverride, fmtClock, DEMO_MIN } from '$lib/concepts/model.js';
-	import { CONCEPTS, DEFAULT_CONCEPT, conceptBySlug } from '$lib/concepts/registry.js';
+	import { torontoNow } from './lib/time.js';
+	import { fetchTravelTimes } from './lib/travel.js';
+	import { buildDay, clockOverride, fmtClock, DEMO_MIN } from './lib/concepts/model.js';
+	import { CONCEPTS, DEFAULT_CONCEPT, conceptBySlug } from './lib/concepts/registry.js';
 	import {
 		snapToGrid,
 		minSwimMin,
@@ -12,7 +12,7 @@
 		SWIM_KINDS,
 		SWIM_KIND_LABELS,
 		DEFAULT_SWIM_KIND
-	} from '$lib/config.js';
+	} from './lib/config.js';
 
 	let { data } = $props();
 

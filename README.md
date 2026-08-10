@@ -16,18 +16,49 @@ no map, no runtime backend; grayscale UI with one accent color.
 | `/v2` | archived snapshot: the design studies gallery (previously `/concepts`) |
 
 The `/vN` routes are **archives, not branches**. Nothing new is built on them,
-and they are deliberately copies rather than refactored into shared components:
-the moment `/v1` renders something `/` also renders, a change to `/` rewrites
-what the snapshot shows, which is the one thing an archive must not do.
+and each is *sealed*: it owns its implementation under `src/routes/vN/lib/`
+rather than importing `$lib`. The duplication is the point — the moment `/v1`
+renders something `/` also renders, a change to `/` rewrites what the snapshot
+shows, which is the one thing an archive must not do.
 
-They stay copies of the *route*, though, not of the whole app — both still
-import `$lib`, so upstream work does reach them. When it does, a snapshot
-showing an older reading of the day is the intended outcome. The bar they have
-to clear is that they still **render and stay explorable**: no throwing, no
-blank shell, no dead controls. `tests/e2e/archive.test.js` enforces exactly
-that and nothing more, so upstream data changes don't drag the archive's tests
-along with them; `tests/unit/archive-routes.test.js` guards the copies against
-a well-meant deduplication.
+```
+src/routes/
+  +page.svelte          the live site        →  $lib/*
+  v1/+page.svelte       archived snapshot    →  v1/lib/*
+  v2/+page.svelte       archived snapshot    →  v2/lib/*  (incl. the concepts)
+```
+
+**The one shared seam** is `$lib/server/`, the build-time data pipeline.
+`+page.server.js` runs at prerender, so a frozen copy of the loader would fail
+the *whole* build — `/` included — the day the city changes its CSV format.
+Sharing it means an archive can go stale, which is allowed; freezing it would
+mean an archive can block a deploy, which is not. The version boundary is the
+schedule payload that pipeline returns.
+
+Because a sealed snapshot's behaviour genuinely stops moving, its tests can be
+frozen too — the depth of test you can pin is exactly the depth of code you've
+sealed:
+
+| Tests | Scope |
+| --- | --- |
+| `tests/e2e/live/` | the live route — change these when the product changes |
+| `tests/e2e/v1/`, `tests/e2e/v2/` | **frozen** specs, copied when the version was cut |
+| `tests/e2e/archive.test.js` | the floor every `/vN` must clear: renders, explorable, deep links work |
+| `tests/unit/v2/` | logic owned by `/v2` (the concepts model) |
+| `tests/unit/archive-routes.test.js` | keeps the snapshots sealed |
+
+When a frozen test goes red, something reached into the snapshot. **Fix the
+snapshot or retire the version — never edit the assertion to match.** Rewriting
+a frozen spec to agree with new behaviour is how an archive silently stops
+being one.
+
+### Adding a version
+
+Copy `src/routes/+page.svelte`, `+page.server.js` and the `$lib` modules it
+imports into `src/routes/vN/lib/`, repoint the imports to `./lib/*` (leave
+`$lib/server/cityData.js` alone), copy `tests/e2e/live/` to `tests/e2e/vN/`
+retargeted at `/vN`, and add the path to the `ARCHIVES` list in
+`tests/e2e/archive.test.js` and `SNAPSHOTS` in `tests/unit/archive-routes.test.js`.
 
 ## Data — official City of Toronto only
 
@@ -111,7 +142,7 @@ route is a separate chunk, so none of d3 or the map data reaches `/`.
 Every concept gets **at most two things you can touch**, and each has its own
 palette so the forms can be compared rather than the styling.
 
-All eleven read one derived model (`src/lib/concepts/model.js`), so eleven very
+All eleven read one derived model (`src/routes/v2/lib/concepts/model.js`), so eleven very
 different pictures are provably drawing the same arithmetic. The quantity they
 all turn on is neither distance nor start time but the moment you could be *in
 the water*:
@@ -138,7 +169,7 @@ Without a Mapbox token the concepts fall back to straight-line estimates —
 of grid distance to straight-line distance) — and every concept's footer says
 "estimated" rather than dressing a guess up as a routed time.
 
-The map concepts draw on `src/lib/geo/torontoOutline.js`, the city boundary
+The map concepts draw on `src/routes/v2/lib/geo/torontoOutline.js`, the city boundary
 dissolved from the [Neighbourhoods](https://open.toronto.ca/dataset/neighbourhoods/)
 dataset and simplified to 839 points (~16 KB). Regenerate it with
 `node scripts/build-city-outline.mjs` — a hand-run script, not part of the

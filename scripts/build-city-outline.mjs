@@ -1,7 +1,13 @@
-// Regenerates src/lib/geo/torontoOutline.js — the city silhouette the map
-// concepts draw on. Run by hand; Toronto's boundary changes about never, so
-// this is deliberately not part of `npm run build` and its dependencies are
-// deliberately not in package.json:
+// Regenerates the city silhouette the map concepts draw on.
+//
+// The only outline in the tree belongs to the /v2 archive, so OUT points into
+// it — and running this rewrites an archived snapshot, which is normally the
+// one thing you don't want. Toronto's boundary changes about never, so in
+// practice this runs when a *new* version needs an outline: point OUT at that
+// version's lib and leave /v2's copy alone.
+//
+// Run by hand: it is deliberately not part of `npm run build`, and its
+// dependencies are deliberately not in package.json:
 //
 //   npm install --no-save topojson-server topojson-simplify topojson-client
 //   node scripts/build-city-outline.mjs
@@ -20,7 +26,7 @@ import { merge } from 'topojson-client';
 
 const SOURCE =
 	'https://ckan0.cf.opendata.inter.prod-toronto.ca/dataset/fc443770-ef0a-4025-9c2c-2cb558bfab00/resource/0719053b-28b7-48ea-b863-068823a93aaa/download/neighbourhoods-4326.geojson';
-const OUT = 'src/lib/geo/torontoOutline.js';
+const OUT = 'src/routes/v2/lib/geo/torontoOutline.js';
 
 // Fraction of points kept by the Visvalingam pass. 0.08 holds the harbour,
 // the Islands and the Humber mouth; 0.04 starts losing them.

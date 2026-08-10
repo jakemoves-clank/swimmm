@@ -1,11 +1,11 @@
 <script>
 	import { onMount } from 'svelte';
-	import { torontoNow } from '$lib/time.js';
-	import { fetchTravelTimes, isReachable } from '$lib/travel.js';
-	import { pickTopResult } from '$lib/topResult.js';
-	import { fetchTransitTimes } from '$lib/transit.js';
-	import { variantLabel } from '$lib/labels.js';
-	import { haversineKm } from '$lib/geo/distance.js';
+	import { torontoNow } from './lib/time.js';
+	import { fetchTravelTimes, isReachable } from './lib/travel.js';
+	import { pickTopResult } from './lib/topResult.js';
+	import { fetchTransitTimes } from './lib/transit.js';
+	import { variantLabel } from './lib/labels.js';
+	import { haversineKm } from './lib/geo/distance.js';
 	import {
 		maxTravelMin,
 		minSwimMin,
@@ -17,7 +17,7 @@
 		SWIM_KIND_LABELS,
 		SWIM_KIND_NOUNS,
 		DEFAULT_SWIM_KIND
-	} from '$lib/config.js';
+	} from './lib/config.js';
 
 	let { data } = $props();
 

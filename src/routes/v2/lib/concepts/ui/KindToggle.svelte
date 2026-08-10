@@ -2,7 +2,7 @@
 	// The one control every concept shares: lane or leisure. It takes no colours
 	// of its own — it inherits --ink, --paper and --accent from whichever
 	// concept is hosting it, so eleven palettes get eleven toggles for free.
-	import { SWIM_KINDS, SWIM_KIND_LABELS } from '$lib/config.js';
+	import { SWIM_KINDS, SWIM_KIND_LABELS } from '../../config.js';
 
 	let { kind, setKind, label = 'Swim type' } = $props();
 </script>

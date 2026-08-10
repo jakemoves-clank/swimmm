@@ -1,5 +1,16 @@
+// FROZEN — /v1's spec, copied from the live suite at the moment /v1 was cut.
+//
+// /v1 owns its implementation (src/routes/v1/lib/), so this describes code
+// that no longer changes, and it should stay green without ever being edited.
+// If it goes red, an upstream change reached into the snapshot: fix the
+// snapshot, or retire the version. Editing these assertions to match new
+// behaviour would quietly rewrite what /v1 is — which is the one thing
+// pinning it was meant to prevent.
+//
+// The live equivalent is tests/e2e/live/ — that is the copy that follows the
+// product, and the one to change when behaviour genuinely moves on.
 import { test, expect } from '@playwright/test';
-import { pinClock } from './fixture-time.js';
+import { pinClock } from '../fixture-time.js';
 
 // The user story: a person in Toronto opens Swimmm, shares their location,
 // and sees which city pools have adult lane swim today — closest and soonest.
@@ -20,7 +31,7 @@ test('shows today’s lane swims, sorted by closeness, with times and distances'
 	// This test covers the no-travel-times fallback: Mapbox is unreachable, so
 	// the page shows straight-line distances and hides nothing.
 	await page.route('**/api.mapbox.com/**', (route) => route.abort());
-	await page.goto('/');
+	await page.goto('/v1');
 
 	// Both seeded pools with lane swim today are listed
 	await expect(page.getByText('Nearby Pool')).toBeVisible();
