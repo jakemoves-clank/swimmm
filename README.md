@@ -202,8 +202,11 @@ npm run build && npm run preview   # the real static build
 
 Environment variables (build-time):
 
-- `PUBLIC_MAPBOX_TOKEN` — Mapbox public (pk.) token enabling travel-time
-  filtering; omit to build without it
+- `PUBLIC_MAPBOX_TOKEN` — Mapbox public (pk.) token. **Required for the root
+  page**: v3 offers dips, a dip states a departure time, and it won't state
+  one it hasn't routed — so a build without a token yields a `/` that can only
+  apologise and link the city's schedules. `/v1` and `/v2` still degrade
+  gracefully without it (straight-line distances, labelled as estimates)
 - `SWIMMM_DATA_FILE` — load the schedule from a local JSON file instead of
   the city (used by e2e tests)
 - `BASE_PATH` — subpath the site is served under (the deploy workflow sets
