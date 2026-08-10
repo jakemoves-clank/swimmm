@@ -14,3 +14,25 @@ export function variantLabel(session) {
 		.replace(/^\s*[:–—-]\s*/, '')
 		.trim();
 }
+
+// How a person says each way of getting to a pool. "bike" is a verb the
+// interface uses elsewhere, but "12-min bike" isn't English — the noun for
+// the trip is a ride.
+const TRAVEL_NOUNS = {
+	walk: 'walk',
+	bike: 'ride',
+	transit: 'transit trip',
+	drive: 'drive'
+};
+
+export function travelPhrase(mode, minutes) {
+	const noun = TRAVEL_NOUNS[mode];
+	if (!noun || minutes == null) return '';
+	return `${minutes}-min ${noun}`;
+}
+
+// The offer in one line, for where there's only room for one. Lowercase
+// "dip" throughout: it's a swim, not a product name.
+export function dipSummary(dip) {
+	return `${dip.durationMin}-min dip, ${travelPhrase(dip.mode, dip.travelMin)} away`;
+}

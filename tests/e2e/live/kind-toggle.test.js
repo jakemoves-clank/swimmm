@@ -17,7 +17,7 @@ test.beforeEach(async ({ page }) => {
 });
 
 test('toggling to Leisure swaps the list, and back to Lane restores it', async ({ page }) => {
-	await page.goto('/');
+	await page.goto('/v1');
 
 	// Lane is the default tab
 	await expect(page.getByRole('button', { name: 'Lane' })).toHaveAttribute('aria-pressed', 'true');
@@ -48,7 +48,7 @@ test('toggling to Leisure swaps the list, and back to Lane restores it', async (
 });
 
 test('?kind=leisure opens directly on the leisure tab', async ({ page }) => {
-	await page.goto('/?kind=leisure');
+	await page.goto('/v1?kind=leisure');
 
 	await expect(page.getByRole('button', { name: 'Leisure' })).toHaveAttribute(
 		'aria-pressed',
@@ -59,7 +59,7 @@ test('?kind=leisure opens directly on the leisure tab', async ({ page }) => {
 });
 
 test('an unknown kind falls back to lane rather than an empty page', async ({ page }) => {
-	await page.goto('/?kind=cannonball');
+	await page.goto('/v1?kind=cannonball');
 
 	await expect(page.getByRole('button', { name: 'Lane' })).toHaveAttribute('aria-pressed', 'true');
 	await expect(page.locator('.card')).toHaveCount(2);

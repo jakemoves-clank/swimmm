@@ -30,7 +30,7 @@ test('filters out swims farther than the travel limit and shows walk/bike times'
 		route.fulfill({ json: { code: 'Ok', durations: [[0, ...durations]] } });
 	});
 
-	await page.goto('/');
+	await page.goto('/v1');
 
 	// The reachable pool is shown with real travel times, not straight-line km
 	const cards = page.locator('.card');
@@ -68,7 +68,7 @@ test('falls back to a transit top pick when walking and biking are too slow', as
 		route.fulfill({ json: { itineraries: [{ duration: 1320, transfers: 1 }] } })
 	);
 
-	await page.goto('/');
+	await page.goto('/v1');
 
 	const top = page.locator('.top-pick');
 	await expect(top).toContainText('Nearby Pool');
@@ -95,7 +95,7 @@ test('shows the dry pool when nothing is an easy walk, ride, or transit trip', a
 		route.fulfill({ json: { code: 'Ok', durations: [[0, ...durations]] } });
 	});
 
-	await page.goto('/');
+	await page.goto('/v1');
 
 	// The list still shows the reachable-but-not-easy swim…
 	await expect(page.getByText('Nearby Pool')).toBeVisible();

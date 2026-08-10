@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { variantLabel } from '../../src/lib/labels.js';
+import { dipSummary, travelPhrase, variantLabel } from '../../src/lib/labels.js';
 
 // Titles below are real values from the city's Drop-in.json.
 const s = (kind, title) => ({ kind, title });
@@ -32,5 +32,28 @@ describe('variantLabel', () => {
 	it('returns empty rather than throwing on an unknown or missing kind', () => {
 		expect(variantLabel(s(undefined, 'Lane Swim'))).toBe('');
 		expect(variantLabel(s('cannonball', 'Lane Swim'))).toBe('');
+	});
+});
+
+describe('travelPhrase', () => {
+	it('names each way of getting there the way a person would say it', () => {
+		expect(travelPhrase('walk', 10)).toBe('10-min walk');
+		expect(travelPhrase('bike', 12)).toBe('12-min ride');
+		expect(travelPhrase('transit', 18)).toBe('18-min transit trip');
+		expect(travelPhrase('drive', 9)).toBe('9-min drive');
+	});
+
+	it('says nothing rather than something wrong when the mode is unknown', () => {
+		expect(travelPhrase(null, 10)).toBe('');
+		expect(travelPhrase('walk', null)).toBe('');
+	});
+});
+
+describe('dipSummary', () => {
+	// The one line that has to carry the whole offer on a small screen.
+	it('reads as an appointment, with lowercase "dip"', () => {
+		expect(dipSummary({ mode: 'walk', travelMin: 10, durationMin: 45 })).toBe(
+			'45-min dip, 10-min walk away'
+		);
 	});
 });
