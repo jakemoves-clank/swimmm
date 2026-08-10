@@ -214,9 +214,20 @@ same result whatever time it runs at.
 
 ## CI
 
-`.github/workflows/tests.yml` runs the unit and e2e suites, **on demand only**
-— nothing runs on push, or when a pull request is opened or updated. Start it
-either way:
+Split by cost, so the cheap half can run unprompted and the expensive half
+can't be triggered by a stranger.
+
+`.github/workflows/guard.yml` runs the **unit suite on every push** (~1s of
+tests; no browsers, no build). It exists because the archive seal is only worth
+having if it fires without anyone remembering to ask — a guard behind a manual
+trigger is not a guard. `push` rather than `pull_request` is deliberate: a
+fork's commits live in the fork and never fire a push event here, so this can
+only be started by someone with write access and no volume of pull requests can
+run it.
+
+`.github/workflows/tests.yml` runs the unit **and** e2e suites — the expensive
+one, since it downloads chromium and webkit — **on demand only**. Nothing runs
+on push, or when a pull request is opened or updated. Start it either way:
 
 - add the `run-tests` label to a pull request (remove and re-add to re-run);
   the result attaches to the PR's checks

@@ -1,0 +1,56 @@
+name: Guard
+
+# The invariants that must not break silently — chiefly that the /vN archives
+# stay sealed (see CLAUDE.md and the README's Routes section). A seal enforced
+# only by a suite someone has to remember to trigger is not enforced at all,
+# so this one runs unprompted.
+#
+# `push` rather than `pull_request` is the whole trick. A fork's commits live
+# in the fork, so they never fire a push event here: this can only be started
+# by someone with write access, which makes it immune to PR spam without
+# depending on an approval setting staying where it is. Outside contributions
+# keep the label gate in tests.yml.
+#
+# It costs a runner minute at most: no browsers, no build, no city data —
+# `npm test` is the unit suite and takes about a second. The expensive half of
+# CI (Playwright's chromium + webkit download) stays on demand in tests.yml.
+#
+# It checks the branch head, not a PR merge commit. These are source-structure
+# invariants, so the branch content is exactly what's in question; use the
+# labelled full run when the merged result is what you want tested.
+on: push
+
+permissions: {}
+
+# A newer push supersedes a run still in flight.
+concurrency:
+  group: guard-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  guard:
+    name: Repo invariants
+    runs-on: ubuntu-latest
+    # A hard ceiling: the job takes well under a minute, so anything near this
+    # is a hang, not slow tests.
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Nothing here pushes; don't leave the job's token where test code
+          # could read it.
+          persist-credentials: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      # Matches the other workflows: dependency lifecycle scripts are the usual
+      # foothold for a compromised package, and nothing here needs them.
+      - run: npm ci --ignore-scripts
+
+      - name: Unit tests (includes the archive seal guards)
+        run: npm test
