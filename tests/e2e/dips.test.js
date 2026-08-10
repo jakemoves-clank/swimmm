@@ -181,7 +181,7 @@ test.describe('when the browser will not say where you are', () => {
 		await context.setGeolocation(null).catch(() => {});
 		await page.goto('/');
 
-		const map = page.locator('svg.map');
+		const map = page.locator('button.map');
 		await expect(map).toBeVisible();
 		const box = await map.boundingBox();
 		// Nearby Pool is at 43.66, -79.40 — close to the middle of the city
@@ -198,7 +198,7 @@ test.describe('when the browser will not say where you are', () => {
 		await context.setGeolocation(null).catch(() => {});
 		await page.goto('/');
 
-		await page.locator('svg.map').focus();
+		await page.locator('button.map').focus();
 		await page.keyboard.press('ArrowLeft');
 		await page.keyboard.press('ArrowDown');
 		await page.keyboard.press('Enter');

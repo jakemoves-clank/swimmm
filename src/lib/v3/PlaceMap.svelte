@@ -95,15 +95,20 @@
 		enough is fine.
 	</p>
 
-	<svg
-		viewBox="0 0 {BOX.w} {BOX.h}"
+	<!-- A real button rather than a tabbable SVG: it is focusable, announced
+	     and keyboard-operable for free, and nothing has to be re-implemented
+	     to make it so. Placement listens for pointerdown (only a real pointer
+	     carries coordinates) while the keyboard drives the marker with the
+	     arrow keys, so the synthetic click a button fires on Enter is simply
+	     never listened for. -->
+	<button
+		type="button"
 		class="map"
-		role="application"
 		aria-label="Map of Toronto with the city's pools marked. Tap to place yourself, or use the arrow keys to move the marker and Enter to confirm."
-		tabindex="0"
 		onpointerdown={fromPointer}
 		onkeydown={onKeydown}
 	>
+		<svg viewBox="0 0 {BOX.w} {BOX.h}" class="canvas" aria-hidden="true">
 		<path class="city" d={path} />
 		{#each dots as d, i (i)}
 			<circle class="pool" cx={d.x} cy={d.y} r="1.6" />
@@ -111,8 +116,9 @@
 		<g class="mark" class:on={placed} transform="translate({mark.x},{mark.y})">
 			<circle class="halo" r="11" />
 			<circle class="dot" r="4" />
-		</g>
-	</svg>
+			</g>
+		</svg>
+	</button>
 
 	<div class="actions">
 		<button class="primary" disabled={!placed} onclick={confirm}>
@@ -145,11 +151,17 @@
 	.map {
 		display: block;
 		width: 100%;
-		height: auto;
+		padding: 0;
+		border: 0;
 		background: #eef2f6;
 		border-radius: 0.4rem;
 		touch-action: manipulation;
 		cursor: crosshair;
+	}
+	.canvas {
+		display: block;
+		width: 100%;
+		height: auto;
 	}
 	.map:focus-visible {
 		outline: 3px solid #0b66e4;
