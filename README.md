@@ -7,6 +7,66 @@ Proof of concept. SvelteKit (Svelte 5), fully static — city data is fetched at
 build time and baked into the prerendered page (~30 KB gzipped). No accounts,
 no map, no runtime backend; grayscale UI with one accent color.
 
+## Routes
+
+| Route | What |
+| --- | --- |
+| `/` | the live site — where development happens |
+| `/v1` | archived snapshot: the main page as it stood |
+| `/v2` | archived snapshot: the design studies gallery (previously `/concepts`) |
+| `/concepts` | signpost to `/v2`, carrying the query string with it |
+
+Keeping `/concepts` alive is the same commitment the `/vN` scheme makes: an
+address that was published once keeps resolving. It redirects in the browser
+because GitHub Pages serves static files and can't issue a 301 (`static/_redirects`
+does it properly on Cloudflare), and it forwards `?c=`, `?at=` and `?kind=`
+rather than dumping deep links on the gallery's front page.
+
+The `/vN` routes are **archives, not branches**. Nothing new is built on them,
+and each is *sealed*: it owns its implementation under `src/routes/vN/lib/`
+rather than importing `$lib`. The duplication is the point — the moment `/v1`
+renders something `/` also renders, a change to `/` rewrites what the snapshot
+shows, which is the one thing an archive must not do.
+
+```
+src/routes/
+  +page.svelte          the live site        →  $lib/*
+  v1/+page.svelte       archived snapshot    →  v1/lib/*
+  v2/+page.svelte       archived snapshot    →  v2/lib/*  (incl. the concepts)
+```
+
+**The one shared seam** is `$lib/server/`, the build-time data pipeline.
+`+page.server.js` runs at prerender, so a frozen copy of the loader would fail
+the *whole* build — `/` included — the day the city changes its CSV format.
+Sharing it means an archive can go stale, which is allowed; freezing it would
+mean an archive can block a deploy, which is not. The version boundary is the
+schedule payload that pipeline returns.
+
+Because a sealed snapshot's behaviour genuinely stops moving, its tests can be
+frozen too — the depth of test you can pin is exactly the depth of code you've
+sealed:
+
+| Tests | Scope |
+| --- | --- |
+| `tests/e2e/live/` | the live route — change these when the product changes |
+| `tests/e2e/v1/`, `tests/e2e/v2/` | **frozen** specs, copied when the version was cut |
+| `tests/e2e/archive.test.js` | the floor every `/vN` must clear: renders, explorable, deep links work |
+| `tests/unit/v2/` | logic owned by `/v2` (the concepts model) |
+| `tests/unit/archive-routes.test.js` | keeps the snapshots sealed |
+
+When a frozen test goes red, something reached into the snapshot. **Fix the
+snapshot or retire the version — never edit the assertion to match.** Rewriting
+a frozen spec to agree with new behaviour is how an archive silently stops
+being one.
+
+### Adding a version
+
+Copy `src/routes/+page.svelte`, `+page.server.js` and the `$lib` modules it
+imports into `src/routes/vN/lib/`, repoint the imports to `./lib/*` (leave
+`$lib/server/cityData.js` alone), copy `tests/e2e/live/` to `tests/e2e/vN/`
+retargeted at `/vN`, and add the path to the `ARCHIVES` list in
+`tests/e2e/archive.test.js` and `SNAPSHOTS` in `tests/unit/archive-routes.test.js`.
+
 ## Data — official City of Toronto only
 
 | What | Dataset | City refresh cadence |
@@ -65,9 +125,9 @@ It's only queried when walking and biking both fail, capped at the
 stays between the browser and the routing providers. When every tier comes
 up empty, the page shows a desert.
 
-## Design studies — `/concepts`
+## Design studies — `/v2`
 
-`/concepts` is a gallery of **eleven ways to draw the same question**: *which
+`/v2` is a gallery of **eleven ways to draw the same question**: *which
 city pool has a swim today that I can actually get to, and how soon?* It is a
 studio wall, not a second product — the main page is untouched by it, and the
 route is a separate chunk, so none of d3 or the map data reaches `/`.
@@ -89,7 +149,7 @@ route is a separate chunk, so none of d3 or the map data reaches `/`.
 Every concept gets **at most two things you can touch**, and each has its own
 palette so the forms can be compared rather than the styling.
 
-All eleven read one derived model (`src/lib/concepts/model.js`), so eleven very
+All eleven read one derived model (`src/routes/v2/lib/concepts/model.js`), so eleven very
 different pictures are provably drawing the same arithmetic. The quantity they
 all turn on is neither distance nor start time but the moment you could be *in
 the water*:
@@ -116,7 +176,7 @@ Without a Mapbox token the concepts fall back to straight-line estimates —
 of grid distance to straight-line distance) — and every concept's footer says
 "estimated" rather than dressing a guess up as a routed time.
 
-The map concepts draw on `src/lib/geo/torontoOutline.js`, the city boundary
+The map concepts draw on `src/routes/v2/lib/geo/torontoOutline.js`, the city boundary
 dissolved from the [Neighbourhoods](https://open.toronto.ca/dataset/neighbourhoods/)
 dataset and simplified to 839 points (~16 KB). Regenerate it with
 `node scripts/build-city-outline.mjs` — a hand-run script, not part of the
@@ -127,7 +187,7 @@ build, since the municipal boundary changes about never.
 The browser asks for your location and uses it **only in the page**, snapped
 to a ~50 m grid before any routing provider sees it. There is no Swimmm
 server to send it to — the site is static files. There is no other user data.
-`/concepts` follows the same rule, and falls back to measuring from Nathan
+`/v2` follows the same rule, and falls back to measuring from Nathan
 Phillips Square when you decline.
 
 ## Develop
@@ -161,9 +221,20 @@ same result whatever time it runs at.
 
 ## CI
 
-`.github/workflows/tests.yml` runs the unit and e2e suites, **on demand only**
-— nothing runs on push, or when a pull request is opened or updated. Start it
-either way:
+Split by cost, so the cheap half can run unprompted and the expensive half
+can't be triggered by a stranger.
+
+`.github/workflows/guard.yml` runs the **unit suite on every push** (~1s of
+tests; no browsers, no build). It exists because the archive seal is only worth
+having if it fires without anyone remembering to ask — a guard behind a manual
+trigger is not a guard. `push` rather than `pull_request` is deliberate: a
+fork's commits live in the fork and never fire a push event here, so this can
+only be started by someone with write access and no volume of pull requests can
+run it.
+
+`.github/workflows/tests.yml` runs the unit **and** e2e suites — the expensive
+one, since it downloads chromium and webkit — **on demand only**. Nothing runs
+on push, or when a pull request is opened or updated. Start it either way:
 
 - add the `run-tests` label to a pull request (remove and re-add to re-run);
   the result attaches to the PR's checks
@@ -171,3 +242,19 @@ either way:
 
 The `run-tests` label has to exist in the repo before it can be applied; GitHub
 lets you create it inline the first time you add it.
+
+Label a PR **`preview`**, then run `deploy.yml` against `main` from the Actions
+tab, and it is built to `/swimmm/pr-<N>/`. Pages hosts one site per repo and
+each deploy replaces it wholesale, so every deploy rebuilds the root from
+`main` *plus* every labelled PR into a single artifact — which is what stops a
+push to `main` from wiping the previews. It's a button rather than a
+`pull_request` trigger so the `github-pages` environment can stay locked to
+`main`; see DEPLOYMENT.md.
+
+`.github/workflows/deploy.yml` runs the unit suite too, as a step in its build
+job before the build itself — so a red suite fails the job before it uploads a
+Pages artifact, and nothing gets published. It costs no extra runner time (that
+job already installs the dependencies) and it means a deploy can't outrun the
+guards. `main` is unprotected, so this step — not a required status check — is
+what stands between a broken invariant and production; add branch protection
+with `guard` as a required check if you want the belt as well as the braces.

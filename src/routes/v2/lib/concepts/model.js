@@ -14,8 +14,8 @@
 //
 // Every concept is a different projection of those two numbers.
 
-import { haversineKm, bearingDeg } from '$lib/geo/distance.js';
-import { variantLabel } from '$lib/labels.js';
+import { haversineKm, bearingDeg } from '../geo/distance.js';
+import { variantLabel } from '../labels.js';
 
 // Straight-line fallback speeds, used when the build has no Mapbox token.
 // 4.8 km/h walking and 15 km/h cycling are the usual planning figures; the

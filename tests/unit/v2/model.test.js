@@ -9,8 +9,8 @@ import {
 	fmtClock,
 	fmtHour,
 	fmtMinutes
-} from '../../src/lib/concepts/model.js';
-import { onActivate } from '../../src/lib/concepts/ui/activate.js';
+} from '../../../src/routes/v2/lib/concepts/model.js';
+import { onActivate } from '../../../src/routes/v2/lib/concepts/ui/activate.js';
 
 const TODAY = '2026-07-31';
 const NOON = { date: TODAY, minutes: 720 };

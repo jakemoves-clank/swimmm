@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { pinClock } from './fixture-time.js';
+import { pinClock } from '../fixture-time.js';
 
 // The user story: someone who wants an open swim rather than lengths flips the
 // toggle and sees leisure sessions instead — and can link straight to that tab.

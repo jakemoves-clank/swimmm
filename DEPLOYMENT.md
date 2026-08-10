@@ -37,6 +37,60 @@ data already in the page, and costs no request.
    CKAN stamp against the deployed `stamp.txt` and rebuilds only when the city
    publishes new data (~weekly) — the site never contacts the city at runtime.
 
+## Pull request previews
+
+To get a preview at `https://<owner>.github.io/swimmm/pr-<N>/`:
+
+1. Label the PR **`preview`**.
+2. Actions → **Deploy to GitHub Pages** → **Run workflow** → branch **`main`**.
+
+Remove the label, or merge or close the PR, and the preview disappears on the
+next deploy. Pushing to the PR does *not* refresh its preview — dispatch again
+(step 2) when you want it current.
+
+GitHub Pages gives one site per repository — there is no per-branch or per-PR
+site — and `actions/deploy-pages` replaces that whole site with each artifact,
+so you cannot add a folder to it. A preview therefore means **rebuilding
+everything into one artifact**: the root from `main`, plus `/pr-N/` for each
+labelled PR. Two consequences worth knowing:
+
+- A push to `main` rebuilds the previews too, so it can't silently wipe them.
+- The set of previews is recomputed from "open PRs carrying the label" on
+  every single deploy. Nothing is tracked, so nothing needs cleaning up.
+
+### Why a button and not a `pull_request` trigger
+
+Because the `github-pages` environment is restricted to the default branch,
+and it should stay that way. A `pull_request` run deploys from the PR's own
+branch, which that policy refuses.
+
+Relaxing the policy is the obvious fix and the wrong one: a `pull_request` run
+uses the workflow file **from the PR's head**, so any PR could rewrite
+`deploy.yml` and publish whatever it liked to the live site — root included.
+Manual dispatch keeps the environment locked to `main` and costs three clicks.
+
+Opt-in by label, for the same reason `run-tests` is: every deploy rebuilds
+every preview, so the cost should be asked for rather than automatic. If PR
+volume ever makes that unwieldy, the escape hatch is switching the publishing
+source to a `gh-pages` branch, where each PR can write only its own
+subdirectory — and where this whole environment question goes away.
+
+Notes on how it stays honest:
+
+- Only branches **in this repository** are ever built (the workflow filters on
+  `head.repo`). A fork's code must not be built by the workflow that publishes
+  the live site.
+- Each preview builds in its own directory and only its output is copied, to
+  `/pr-N/` and nowhere else — so a PR's build cannot reach the site root.
+- Previews reuse the root build's already-downloaded city data via
+  `SWIMMM_DATA_FILE`: one download per deploy rather than one per PR, and a
+  preview then differs from production only by the PR's code, never by data
+  that moved between builds.
+- `BASE_PATH` is the only build difference (`/swimmm/pr-N`). Assets are
+  emitted relative, so nothing else changes.
+- The Mapbox URL restriction below is per **origin**, not per path, so
+  previews get real travel times rather than the degraded distance-only mode.
+
 ## Mapbox token (do this before launch)
 
 The token ships to every browser and **will** be scraped. In the Mapbox

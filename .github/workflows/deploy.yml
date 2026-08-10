@@ -7,11 +7,14 @@ on:
     # Daily, ~06:23 Toronto. The gate below skips the rebuild unless the
     # city has actually published new data, so deploys happen ~weekly.
     - cron: '23 10 * * *'
+  # Also how you refresh a PR preview: run this workflow against `main` from
+  # the Actions tab. See the preview notes on the build job below for why it
+  # is a manual dispatch rather than a pull_request trigger.
   workflow_dispatch:
 
 # Deny by default; each job opts into only what it needs. In particular the
 # build job — the only one that runs third-party code (npm deps, the SvelteKit
-# build) — never holds pages:write or id-token:write.
+# build, and now a PR's code) — never holds pages:write or id-token:write.
 permissions: {}
 
 concurrency:
@@ -21,12 +24,17 @@ concurrency:
 
 jobs:
   gate:
-    name: Check whether the city published new data
+    name: Check the city's data, and which PRs want a preview
     runs-on: ubuntu-latest
     timeout-minutes: 5
-    permissions: {}
+    # pull-requests:read is deliberately held *here* rather than in the build
+    # job: this job runs no project code, so the token never sits in a job
+    # that does.
+    permissions:
+      pull-requests: read
     outputs:
       changed: ${{ steps.check.outputs.changed }}
+      previews: ${{ steps.previews.outputs.list }}
     steps:
       - id: check
         env:
@@ -34,7 +42,7 @@ jobs:
           SITE: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}
         run: |
           set -euo pipefail
-          # Only scheduled runs are gated; pushes and manual runs always build.
+          # Only scheduled runs are gated; everything else always builds.
           if [ "$EVENT" != "schedule" ]; then
             echo "changed=true" >> "$GITHUB_OUTPUT"; exit 0
           fi
@@ -50,6 +58,27 @@ jobs:
             echo "changed=true" >> "$GITHUB_OUTPUT"
           fi
 
+      # The set of previews is recomputed from scratch on every deploy rather
+      # than tracked anywhere: whatever is open and labelled right now is what
+      # the site will carry. That is what makes removing a label or merging a
+      # PR delete its preview, with no cleanup step to forget.
+      - id: previews
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          # head.repo filter: only ever build code from a branch in this
+          # repository. A fork's PR must not be built by a workflow that
+          # publishes to the live site.
+          LIST=$(gh api "repos/$REPO/pulls?state=open&per_page=100" \
+            --jq "[ .[]
+                    | select(any(.labels[]; .name == \"preview\"))
+                    | select(.head.repo.full_name == \"$REPO\")
+                    | {number, sha: .head.sha} ]")
+          echo "previews: $LIST"
+          echo "list=$(echo "$LIST" | jq -c .)" >> "$GITHUB_OUTPUT"
+
   build:
     name: Build static site
     needs: gate
@@ -59,23 +88,47 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v4
+      # Always the root of the site, whatever triggered this run. A
+      # pull_request event would otherwise check out the PR's merge ref, and
+      # the root would quietly become that PR's code.
+      - name: Check out main
+        uses: actions/checkout@v4
         with:
+          ref: main
           # Don't leave the job's token in .git/config where build scripts
           # could read it. Nothing here pushes.
           persist-credentials: false
+          path: root-src
 
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
+          cache-dependency-path: root-src/package-lock.json
 
       # --ignore-scripts blocks dependency lifecycle scripts, the usual
       # foothold for a compromised package. Verified: the build doesn't
       # need them.
       - run: npm ci --ignore-scripts
+        working-directory: root-src
 
-      - name: Build (fetches city data once)
+      # Nothing published without the unit suite passing. It runs here, in the
+      # job that already paid for `npm ci`, rather than as a separate gating
+      # job: same ~1s of tests, no extra runner minutes, and because the step
+      # fails before `upload-pages-artifact` below, a red suite means there is
+      # no artifact to deploy.
+      #
+      # Deliberately the unit suite only — the same set guard.yml runs on every
+      # push. The e2e suite needs a browser download that would add minutes to
+      # every deploy, and it stays on demand in tests.yml. So this catches the
+      # repo's invariants (chiefly the /vN archive seal) and unit regressions,
+      # not a rendering break; label a PR `run-tests` for that.
+      - name: Unit tests (nothing deploys if these fail)
+        run: npm test
+        working-directory: root-src
+
+      - name: Build the site root (fetches city data once)
+        working-directory: root-src
         env:
           BASE_PATH: /${{ github.event.repository.name }}
           # A repository *variable*: the token is compiled into the bundle and
@@ -99,16 +152,76 @@ jobs:
       # invisible. Only ever reports whether a token arrived, never its value.
       - name: Report whether travel times are enabled
         run: |
-          if grep -q 'mapboxToken:null' build/index.html; then
+          if grep -q 'mapboxToken:null' root-src/build/index.html; then
             echo "::warning::No PUBLIC_MAPBOX_TOKEN reached the build — deploying without walk/bike/transit times. Set it under Settings → Secrets and variables → Actions → Variables as a repository variable (an environment-scoped one will not reach this job)."
             echo 'Travel times: **off** — no `PUBLIC_MAPBOX_TOKEN` reached the build.' >> "$GITHUB_STEP_SUMMARY"
           else
             echo 'Travel times: **on**.' >> "$GITHUB_STEP_SUMMARY"
           fi
 
+      - name: Assemble the site
+        run: |
+          set -euo pipefail
+          mkdir -p site
+          cp -r root-src/build/. site/
+
+      # Previews. Pages hosts one site per repository and deploy-pages replaces
+      # that whole site with each artifact — you cannot add a folder to it — so
+      # a preview means rebuilding everything into one artifact: the root from
+      # main, plus /pr-N/ for each PR labelled `preview`.
+      #
+      # Refreshed on main deploys and on manual dispatch, NOT by a
+      # pull_request trigger, and that is deliberate. A pull_request run
+      # deploys from the PR's branch, which the `github-pages` environment
+      # rightly refuses — it is restricted to the default branch. Relaxing
+      # that would mean any PR could publish to the live site, because a
+      # pull_request run uses the workflow file from the PR's own head. Better
+      # to press a button: Actions → Deploy to GitHub Pages → Run workflow
+      # against `main`. The trade is that pushing to a PR does not refresh its
+      # preview on its own.
+      #
+      # Each preview is built from its own checkout into its own directory,
+      # and only its build output is copied into the site — under /pr-N/ and
+      # nowhere else. A PR cannot reach the root that way, which matters
+      # because this step runs that PR's build.
+      #
+      # Every preview reads the root build's already-downloaded city data via
+      # SWIMMM_DATA_FILE. One download rather than one per PR (the city's
+      # politeness contract — see src/lib/server/cityData.js), and, more
+      # usefully, a preview then differs from production only by the PR's
+      # code and never by data that moved between builds.
+      - name: Build previews
+        if: needs.gate.outputs.previews != '[]'
+        env:
+          PREVIEWS: ${{ needs.gate.outputs.previews }}
+          REPO_NAME: ${{ github.event.repository.name }}
+          PUBLIC_MAPBOX_TOKEN: ${{ vars.PUBLIC_MAPBOX_TOKEN }}
+        run: |
+          set -euo pipefail
+          DATA="$PWD/root-src/.city-cache/schedule.json"
+          for N in $(echo "$PREVIEWS" | jq -r '.[].number'); do
+            echo "::group::preview for PR #$N"
+            rm -rf pr-src && mkdir pr-src
+            # refs/pull/N/head rather than the head SHA: it is the canonical
+            # ref GitHub always serves, so this doesn't depend on how a PR's
+            # commits happen to be reachable. Shallow — only the tip is built.
+            git -C pr-src init --quiet
+            git -C pr-src remote add origin "https://github.com/$GITHUB_REPOSITORY.git"
+            git -C pr-src fetch --quiet --depth 1 origin "refs/pull/$N/head"
+            git -C pr-src -c advice.detachedHead=false checkout --quiet FETCH_HEAD
+            echo "building $(git -C pr-src rev-parse HEAD)"
+            ( cd pr-src \
+              && npm ci --ignore-scripts --silent \
+              && BASE_PATH="/$REPO_NAME/pr-$N" SWIMMM_DATA_FILE="$DATA" npm run build )
+            mkdir -p "site/pr-$N"
+            cp -r pr-src/build/. "site/pr-$N/"
+            echo "preview: /$REPO_NAME/pr-$N/" >> "$GITHUB_STEP_SUMMARY"
+            echo "::endgroup::"
+          done
+
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: build
+          path: site
 
   deploy:
     name: Publish to Pages

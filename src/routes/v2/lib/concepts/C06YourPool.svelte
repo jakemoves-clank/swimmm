@@ -10,7 +10,7 @@
 	import { Delaunay } from 'd3-delaunay';
 	import { scaleSequentialSqrt } from 'd3-scale';
 	import { interpolateYlGnBu } from 'd3-scale-chromatic';
-	import { TORONTO_OUTLINE } from '$lib/geo/torontoOutline.js';
+	import { TORONTO_OUTLINE } from '../geo/torontoOutline.js';
 	import { fmtClock, fmtMinutes, MODE_LABEL } from './model.js';
 	import KindToggle from './ui/KindToggle.svelte';
 	import { onActivate } from './ui/activate.js';

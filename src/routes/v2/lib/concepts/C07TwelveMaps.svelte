@@ -6,7 +6,7 @@
 	// Read left to right and the day's shape appears — a dense downtown
 	// morning, a thin afternoon, an evening that spreads north and east.
 	import { geoMercator, geoPath } from 'd3-geo';
-	import { TORONTO_OUTLINE } from '$lib/geo/torontoOutline.js';
+	import { TORONTO_OUTLINE } from '../geo/torontoOutline.js';
 	import { fmtHour } from './model.js';
 
 	let { day, kind, origin } = $props();
