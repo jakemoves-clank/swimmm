@@ -39,9 +39,14 @@ data already in the page, and costs no request.
 
 ## Pull request previews
 
-Label a PR **`preview`** and it gets built to
-`https://<owner>.github.io/swimmm/pr-<N>/`. Remove the label, or merge or close
-the PR, and it disappears on the next deploy.
+To get a preview at `https://<owner>.github.io/swimmm/pr-<N>/`:
+
+1. Label the PR **`preview`**.
+2. Actions → **Deploy to GitHub Pages** → **Run workflow** → branch **`main`**.
+
+Remove the label, or merge or close the PR, and the preview disappears on the
+next deploy. Pushing to the PR does *not* refresh its preview — dispatch again
+(step 2) when you want it current.
 
 GitHub Pages gives one site per repository — there is no per-branch or per-PR
 site — and `actions/deploy-pages` replaces that whole site with each artifact,
@@ -53,11 +58,22 @@ labelled PR. Two consequences worth knowing:
 - The set of previews is recomputed from "open PRs carrying the label" on
   every single deploy. Nothing is tracked, so nothing needs cleaning up.
 
+### Why a button and not a `pull_request` trigger
+
+Because the `github-pages` environment is restricted to the default branch,
+and it should stay that way. A `pull_request` run deploys from the PR's own
+branch, which that policy refuses.
+
+Relaxing the policy is the obvious fix and the wrong one: a `pull_request` run
+uses the workflow file **from the PR's head**, so any PR could rewrite
+`deploy.yml` and publish whatever it liked to the live site — root included.
+Manual dispatch keeps the environment locked to `main` and costs three clicks.
+
 Opt-in by label, for the same reason `run-tests` is: every deploy rebuilds
 every preview, so the cost should be asked for rather than automatic. If PR
 volume ever makes that unwieldy, the escape hatch is switching the publishing
 source to a `gh-pages` branch, where each PR can write only its own
-subdirectory.
+subdirectory — and where this whole environment question goes away.
 
 Notes on how it stays honest:
 

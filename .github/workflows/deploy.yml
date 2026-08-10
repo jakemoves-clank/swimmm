@@ -7,19 +7,10 @@ on:
     # Daily, ~06:23 Toronto. The gate below skips the rebuild unless the
     # city has actually published new data, so deploys happen ~weekly.
     - cron: '23 10 * * *'
+  # Also how you refresh a PR preview: run this workflow against `main` from
+  # the Actions tab. See the preview notes on the build job below for why it
+  # is a manual dispatch rather than a pull_request trigger.
   workflow_dispatch:
-  # Preview builds. GitHub Pages gives one site per repository, and
-  # actions/deploy-pages replaces that whole site with each artifact — you
-  # cannot add a folder to it — so a PR preview means rebuilding everything
-  # into one artifact: the root from main, plus /pr-N/ for each PR carrying
-  # the `preview` label. That is why a pull_request event deploys the site.
-  #
-  # Opt-in by label rather than automatic, for the same reason tests.yml is:
-  # every deploy rebuilds every preview, so the cost should be something you
-  # ask for. `unlabeled` and `closed` are here to rebuild *without* a preview
-  # once it is no longer wanted, which is how previews get cleaned up.
-  pull_request:
-    types: [labeled, unlabeled, synchronize, reopened, closed]
 
 # Deny by default; each job opts into only what it needs. In particular the
 # build job — the only one that runs third-party code (npm deps, the SvelteKit
@@ -35,19 +26,6 @@ jobs:
   gate:
     name: Check the city's data, and which PRs want a preview
     runs-on: ubuntu-latest
-    # A pull_request event only deploys when previews are actually involved.
-    # `synchronize` fires on every push to every open PR, so without this an
-    # unlabelled PR would redeploy the production site on each push.
-    #
-    #   - labelled/unlabelled `preview`  → rebuild, to add or remove it
-    #   - any push to a PR already carrying the label → refresh its preview
-    #   - closed, if it had the label    → rebuild, dropping it
-    #
-    # Anything else on a pull_request is not this workflow's business.
-    if: >-
-      github.event_name != 'pull_request' ||
-      github.event.label.name == 'preview' ||
-      contains(github.event.pull_request.labels.*.name, 'preview')
     timeout-minutes: 5
     # pull-requests:read is deliberately held *here* rather than in the build
     # job: this job runs no project code, so the token never sits in a job
@@ -187,6 +165,21 @@ jobs:
           mkdir -p site
           cp -r root-src/build/. site/
 
+      # Previews. Pages hosts one site per repository and deploy-pages replaces
+      # that whole site with each artifact — you cannot add a folder to it — so
+      # a preview means rebuilding everything into one artifact: the root from
+      # main, plus /pr-N/ for each PR labelled `preview`.
+      #
+      # Refreshed on main deploys and on manual dispatch, NOT by a
+      # pull_request trigger, and that is deliberate. A pull_request run
+      # deploys from the PR's branch, which the `github-pages` environment
+      # rightly refuses — it is restricted to the default branch. Relaxing
+      # that would mean any PR could publish to the live site, because a
+      # pull_request run uses the workflow file from the PR's own head. Better
+      # to press a button: Actions → Deploy to GitHub Pages → Run workflow
+      # against `main`. The trade is that pushing to a PR does not refresh its
+      # preview on its own.
+      #
       # Each preview is built from its own checkout into its own directory,
       # and only its build output is copied into the site — under /pr-N/ and
       # nowhere else. A PR cannot reach the root that way, which matters
