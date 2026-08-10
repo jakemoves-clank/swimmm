@@ -7,6 +7,14 @@ Proof of concept. SvelteKit (Svelte 5), fully static — city data is fetched at
 build time and baked into the prerendered page (~30 KB gzipped). No accounts,
 no map, no runtime backend; grayscale UI with one accent color.
 
+## Routes
+
+| Route | What |
+| --- | --- |
+| `/` | the main page — the current version, served at the root |
+| `/v1` | a pinned copy of the main page, so the root can move on without breaking a link |
+| `/v2` | the design studies gallery (previously `/concepts`) |
+
 ## Data — official City of Toronto only
 
 | What | Dataset | City refresh cadence |
@@ -65,9 +73,9 @@ It's only queried when walking and biking both fail, capped at the
 stays between the browser and the routing providers. When every tier comes
 up empty, the page shows a desert.
 
-## Design studies — `/concepts`
+## Design studies — `/v2`
 
-`/concepts` is a gallery of **eleven ways to draw the same question**: *which
+`/v2` is a gallery of **eleven ways to draw the same question**: *which
 city pool has a swim today that I can actually get to, and how soon?* It is a
 studio wall, not a second product — the main page is untouched by it, and the
 route is a separate chunk, so none of d3 or the map data reaches `/`.
@@ -127,7 +135,7 @@ build, since the municipal boundary changes about never.
 The browser asks for your location and uses it **only in the page**, snapped
 to a ~50 m grid before any routing provider sees it. There is no Swimmm
 server to send it to — the site is static files. There is no other user data.
-`/concepts` follows the same rule, and falls back to measuring from Nathan
+`/v2` follows the same rule, and falls back to measuring from Nathan
 Phillips Square when you decline.
 
 ## Develop

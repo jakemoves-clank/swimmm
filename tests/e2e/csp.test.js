@@ -37,7 +37,7 @@ test.beforeEach(async ({ page }) => {
 	await page.route('**/api.mapbox.com/**', (route) => route.abort());
 });
 
-for (const path of ['/', '/concepts']) {
+for (const path of ['/', '/v1', '/v2']) {
 	test(`${path} loads with no CSP violations`, async ({ page }) => {
 		const violations = await watchViolations(page);
 		await page.goto(path);
@@ -53,7 +53,7 @@ for (const path of ['/', '/concepts']) {
 // change, not a cold load.
 test('a client-side navigation announces without tripping the policy', async ({ page }) => {
 	const violations = await watchViolations(page);
-	await page.goto('/concepts');
+	await page.goto('/v2');
 	await page.getByRole('link', { name: 'back to Swimmm' }).click();
 	await expect(page).toHaveURL(/\/$/);
 

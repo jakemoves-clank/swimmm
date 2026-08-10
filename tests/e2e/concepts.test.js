@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { anchorInstant, pinClock, readAnchor } from './fixture-time.js';
 
-// The gallery at /concepts draws the same day eleven ways. What matters in
+// The gallery at /v2 draws the same day eleven ways. What matters in
 // e2e is that all eleven actually render against real payload shapes — several
 // build layouts from measured widths, run a force simulation, or tessellate
 // the city, and any of those can throw on a two-pool day without the unit
@@ -51,7 +51,7 @@ const navTo = (page, i) => page.getByRole('button', { name: navName(i), exact: t
 
 test('all eleven concepts draw, one after another, without throwing', async ({ page }) => {
 	const errors = watchForErrors(page);
-	await page.goto('/concepts');
+	await page.goto('/v2');
 
 	for (const [i, [slug, title]] of CONCEPTS.entries()) {
 		await navTo(page, i);
@@ -63,7 +63,7 @@ test('all eleven concepts draw, one after another, without throwing', async ({ p
 		const box = await figure.boundingBox();
 		expect(box.height, `${slug} drew nothing`).toBeGreaterThan(120);
 
-		await expect(page).toHaveURL(slug === 'trip-line' ? /\/concepts$/ : new RegExp(`c=${slug}`));
+		await expect(page).toHaveURL(slug === 'trip-line' ? /\/v2$/ : new RegExp(`c=${slug}`));
 	}
 
 	expect(errors, errors.join('\n')).toEqual([]);
@@ -71,7 +71,7 @@ test('all eleven concepts draw, one after another, without throwing', async ({ p
 
 test('a deep link opens straight onto its concept', async ({ page }) => {
 	const errors = watchForErrors(page);
-	await page.goto('/concepts?c=almanac');
+	await page.goto('/v2?c=almanac');
 
 	await expect(page.getByRole('heading', { level: 2 })).toContainText('The Almanac');
 	await expect(page.getByRole('button', { name: navName(7), exact: true })).toHaveAttribute(
@@ -82,12 +82,12 @@ test('a deep link opens straight onto its concept', async ({ page }) => {
 });
 
 test('an unknown concept falls back to the first rather than a blank wall', async ({ page }) => {
-	await page.goto('/concepts?c=butterfly');
+	await page.goto('/v2?c=butterfly');
 	await expect(page.getByRole('heading', { level: 2 })).toContainText('The Trip Line');
 });
 
 test('the concepts agree on which swim you can actually get to', async ({ page }) => {
-	await page.goto('/concepts');
+	await page.goto('/v2');
 
 	// Faraway Pool starts sooner but leaves you 25 minutes in the water, so
 	// every concept that names an answer has to name Nearby Pool.
@@ -100,7 +100,7 @@ test('the concepts agree on which swim you can actually get to', async ({ page }
 });
 
 test('the lane/leisure toggle filters inside a concept and rides in the URL', async ({ page }) => {
-	await page.goto('/concepts?c=almanac');
+	await page.goto('/v2?c=almanac');
 
 	// Lane: both pools run one. Leisure: only Nearby Pool does.
 	await expect(page.locator('#stage [role="row"]:not(.head)')).toHaveCount(2);
@@ -116,7 +116,7 @@ test('the lane/leisure toggle filters inside a concept and rides in the URL', as
 // away — no plausible street sign tells you to cycle to Scarborough — so
 // Faraway Pool, ~19 km off, never gets a sign even though it has a swim.
 test('the sign board drops a pool it would be absurd to send you to', async ({ page }) => {
-	await page.goto('/concepts?c=parking-sign');
+	await page.goto('/v2?c=parking-sign');
 
 	await expect(page.locator('#stage .sign')).toHaveCount(1);
 	await expect(page.locator('#stage .sign').first()).toContainText('Nearby Pool');
@@ -125,7 +125,7 @@ test('the sign board drops a pool it would be absurd to send you to', async ({ p
 
 test('?at= sets the clock, and every concept survives an empty day', async ({ page }) => {
 	const errors = watchForErrors(page);
-	await page.goto('/concepts?at=23:30');
+	await page.goto('/v2?at=23:30');
 
 	await expect(page.getByText(/Clock set to 11:30 pm/)).toBeVisible();
 	await expect(page.locator('.meta')).toContainText('0 still to come');
@@ -144,7 +144,7 @@ test('when the whole city is shut, the gallery rehearses the day and says so', a
 	// leave all eleven concepts drawing an empty city.
 	const lateNight = new Date(anchorInstant(readAnchor().date).getTime() + (23 * 60 + 50 - 720) * 60_000);
 	await page.clock.setFixedTime(lateNight);
-	await page.goto('/concepts');
+	await page.goto('/v2');
 
 	await expect(page.getByText(/Rehearsal/)).toBeVisible();
 	await expect(page.locator('.meta')).toContainText('still to come');
