@@ -235,3 +235,11 @@ on push, or when a pull request is opened or updated. Start it either way:
 
 The `run-tests` label has to exist in the repo before it can be applied; GitHub
 lets you create it inline the first time you add it.
+
+`.github/workflows/deploy.yml` runs the unit suite too, as a step in its build
+job before the build itself — so a red suite fails the job before it uploads a
+Pages artifact, and nothing gets published. It costs no extra runner time (that
+job already installs the dependencies) and it means a deploy can't outrun the
+guards. `main` is unprotected, so this step — not a required status check — is
+what stands between a broken invariant and production; add branch protection
+with `guard` as a required check if you want the belt as well as the braces.

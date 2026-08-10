@@ -75,6 +75,20 @@ jobs:
       # need them.
       - run: npm ci --ignore-scripts
 
+      # Nothing published without the unit suite passing. It runs here, in the
+      # job that already paid for `npm ci`, rather than as a separate gating
+      # job: same ~1s of tests, no extra runner minutes, and because the step
+      # fails before `upload-pages-artifact` below, a red suite means there is
+      # no artifact to deploy.
+      #
+      # Deliberately the unit suite only — the same set guard.yml runs on every
+      # push. The e2e suite needs a browser download that would add minutes to
+      # every deploy, and it stays on demand in tests.yml. So this catches the
+      # repo's invariants (chiefly the /vN archive seal) and unit regressions,
+      # not a rendering break; label a PR `run-tests` for that.
+      - name: Unit tests (nothing deploys if these fail)
+        run: npm test
+
       - name: Build (fetches city data once)
         env:
           BASE_PATH: /${{ github.event.repository.name }}
