@@ -160,3 +160,49 @@ test('still offers today when asked before any pool has opened', async ({ page }
 	await expect(page.locator('.hour').first()).toContainText('12pm');
 	await expect(page.getByText('3am', { exact: true })).toHaveCount(0);
 });
+
+// v3 never measures from a landmark and calls the result yours. Decline the
+// permission and it asks directly, on a map, rather than quietly answering
+// for somewhere you are not.
+test.describe('when the browser will not say where you are', () => {
+	test.use({ permissions: [] });
+
+	test('asks you to place yourself instead of guessing', async ({ page, context }) => {
+		await context.setGeolocation(null).catch(() => {});
+		await page.goto('/');
+
+		await expect(page.getByRole('heading', { name: /Roughly where are you/ })).toBeVisible();
+		await expect(page.locator('.dip')).toHaveCount(0);
+		// Nothing is offered until the question is answered.
+		await expect(page.getByRole('button', { name: /Tap the map first/ })).toBeDisabled();
+	});
+
+	test('offers dips measured from the point you tapped', async ({ page, context }) => {
+		await context.setGeolocation(null).catch(() => {});
+		await page.goto('/');
+
+		const map = page.locator('svg.map');
+		await expect(map).toBeVisible();
+		const box = await map.boundingBox();
+		// Nearby Pool is at 43.66, -79.40 — close to the middle of the city
+		// box, which is good enough for a test of the mechanism.
+		await map.click({ position: { x: box.width * 0.45, y: box.height * 0.62 } });
+		await page.getByRole('button', { name: /Show dips from here/ }).click();
+
+		await expect(page.getByText(/Measuring from the spot you picked/)).toBeVisible();
+		await expect(page.locator('.dip').first()).toContainText('Nearby Pool');
+	});
+
+	// A map you can only tap is a map some people cannot use.
+	test('can be answered from the keyboard alone', async ({ page, context }) => {
+		await context.setGeolocation(null).catch(() => {});
+		await page.goto('/');
+
+		await page.locator('svg.map').focus();
+		await page.keyboard.press('ArrowLeft');
+		await page.keyboard.press('ArrowDown');
+		await page.keyboard.press('Enter');
+
+		await expect(page.getByText(/Measuring from the spot you picked/)).toBeVisible();
+	});
+});

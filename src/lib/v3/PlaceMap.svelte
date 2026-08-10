@@ -1,0 +1,200 @@
+<script>
+	// "Roughly where are you?"
+	//
+	// Every dip is measured from a point, so without one v3 has nothing to
+	// say. When the browser won't give us a location we ask for one directly
+	// rather than quietly measuring from somewhere you aren't: a precisely
+	// routed trip from a place you are not standing is a worse lie than an
+	// approximate one from where you actually are.
+	//
+	// Deliberately not a real map. No tiles, no zoom, no pan — one outline of
+	// one city that fits on the screen, because the question is "which part of
+	// town", not "which building". Coarse is honest here: the answer only has
+	// to be good enough to rank a walk against a ride, and the point gets
+	// snapped to a ~50 m grid before any routing provider sees it anyway.
+	import { TORONTO_OUTLINE } from '$lib/geo/torontoOutline.js';
+	import { cityBounds, makeProjection, outlinePath } from './placemap.js';
+
+	let { onplace, pools = [] } = $props();
+
+	const BOX = { w: 320, h: 210 };
+	const bounds = cityBounds(TORONTO_OUTLINE);
+	const projection = makeProjection(bounds, BOX.w, BOX.h);
+	const path = outlinePath(TORONTO_OUTLINE, projection);
+
+	// The pools, as dots. A bare silhouette is genuinely hard to place
+	// yourself on — few people can point at their own neighbourhood on an
+	// unlabelled outline — and these are the one set of landmarks the page
+	// already has. They also quietly preview the answer: the cluster you are
+	// standing nearest is the cluster you'll be offered from.
+	const dots = $derived(
+		pools
+			.filter((p) => Number.isFinite(p.lat) && Number.isFinite(p.lng))
+			.map((p) => projection.toXY(p.lng, p.lat))
+	);
+
+	// Starts in the middle of the city rather than nowhere, so the keyboard
+	// route has something to move and the crosshair explains itself.
+	let mark = $state({ x: BOX.w / 2, y: BOX.h / 2 });
+	let placed = $state(false);
+
+	// One arrow press moves about a kilometre — fine enough to pick a
+	// neighbourhood, coarse enough to cross the city without wearing out a
+	// thumb. Shift moves five times as far.
+	const STEP_KM = 1;
+	const stepPx = (STEP_KM / 111) * (projection.height / (bounds.north - bounds.south));
+
+	function place(x, y) {
+		mark = {
+			x: Math.max(0, Math.min(BOX.w, x)),
+			y: Math.max(0, Math.min(BOX.h, y))
+		};
+		placed = true;
+	}
+
+	function fromPointer(event) {
+		const rect = event.currentTarget.getBoundingClientRect();
+		// The SVG scales to its container, so a client pixel is not a viewBox
+		// unit; convert through the rendered size or every tap lands short.
+		place(
+			((event.clientX - rect.left) / rect.width) * BOX.w,
+			((event.clientY - rect.top) / rect.height) * BOX.h
+		);
+	}
+
+	function onKeydown(event) {
+		const far = event.shiftKey ? 5 : 1;
+		const moves = {
+			ArrowUp: [0, -1],
+			ArrowDown: [0, 1],
+			ArrowLeft: [-1, 0],
+			ArrowRight: [1, 0]
+		};
+		const move = moves[event.key];
+		if (move) {
+			event.preventDefault();
+			place(mark.x + move[0] * stepPx * far, mark.y + move[1] * stepPx * far);
+			return;
+		}
+		if (event.key === 'Enter' || event.key === ' ') {
+			event.preventDefault();
+			confirm();
+		}
+	}
+
+	function confirm() {
+		const { lng, lat } = projection.toLngLat(mark.x, mark.y);
+		onplace({ lat, lng });
+	}
+</script>
+
+<section class="place" aria-labelledby="place-heading">
+	<h2 id="place-heading">Roughly where are you?</h2>
+	<p class="why">
+		Every dip is measured from somewhere, and your browser didn't say. Tap the map — anywhere near
+		enough is fine.
+	</p>
+
+	<svg
+		viewBox="0 0 {BOX.w} {BOX.h}"
+		class="map"
+		role="application"
+		aria-label="Map of Toronto with the city's pools marked. Tap to place yourself, or use the arrow keys to move the marker and Enter to confirm."
+		tabindex="0"
+		onpointerdown={fromPointer}
+		onkeydown={onKeydown}
+	>
+		<path class="city" d={path} />
+		{#each dots as d, i (i)}
+			<circle class="pool" cx={d.x} cy={d.y} r="1.6" />
+		{/each}
+		<g class="mark" class:on={placed} transform="translate({mark.x},{mark.y})">
+			<circle class="halo" r="11" />
+			<circle class="dot" r="4" />
+		</g>
+	</svg>
+
+	<div class="actions">
+		<button class="primary" disabled={!placed} onclick={confirm}>
+			{placed ? 'Show dips from here' : 'Tap the map first'}
+		</button>
+	</div>
+	<p class="fine">
+		Your location stays in this browser; only a point snapped to a ~50 m grid is sent to the routing
+		services that work out travel times.
+	</p>
+</section>
+
+<style>
+	.place {
+		background: #fff;
+		border: 1px solid #e0e0e0;
+		border-radius: 0.6rem;
+		padding: 0.9rem;
+		margin: 0.75rem 0;
+	}
+	h2 {
+		margin: 0;
+		font-size: 1.05rem;
+	}
+	.why {
+		margin: 0.25rem 0 0.6rem;
+		font-size: 0.85rem;
+		color: #555;
+	}
+	.map {
+		display: block;
+		width: 100%;
+		height: auto;
+		background: #eef2f6;
+		border-radius: 0.4rem;
+		touch-action: manipulation;
+		cursor: crosshair;
+	}
+	.map:focus-visible {
+		outline: 3px solid #0b66e4;
+		outline-offset: 2px;
+	}
+	.city {
+		fill: #d7dee6;
+		stroke: #b9c4d0;
+		stroke-width: 0.6;
+	}
+	.pool {
+		fill: #7f92a6;
+	}
+	.mark .halo {
+		fill: rgb(11 102 228 / 0.18);
+	}
+	.mark .dot {
+		fill: #0b66e4;
+		stroke: #fff;
+		stroke-width: 1.5;
+	}
+	/* Before the first tap the crosshair is a suggestion, not an answer. */
+	.mark:not(.on) {
+		opacity: 0.45;
+	}
+	.actions {
+		margin-top: 0.6rem;
+	}
+	.primary {
+		width: 100%;
+		border: 0;
+		border-radius: 999px;
+		background: #0b66e4;
+		color: #fff;
+		font: 600 0.95rem/1 inherit;
+		padding: 0.7rem 1rem;
+		cursor: pointer;
+	}
+	.primary:disabled {
+		background: #c8d2dd;
+		cursor: default;
+	}
+	.fine {
+		margin: 0.55rem 0 0;
+		font-size: 0.72rem;
+		color: #888;
+	}
+</style>

@@ -17,6 +17,7 @@
 	import { MODES, modeRule } from '$lib/appeal.js';
 	import { dayLabel } from '$lib/labels.js';
 	import DayPlanner from './DayPlanner.svelte';
+	import PlaceMap from './PlaceMap.svelte';
 	import {
 		dipDurationMin,
 		swimKindParam,
@@ -32,14 +33,10 @@
 
 	let { data } = $props();
 
-	// Somewhere has to be the middle of the map when the browser won't say.
-	// Every dip is an offer measured from a point, so an origin-less v3 has
-	// nothing to say at all — the banner is explicit that this isn't you.
-	const CITY_HALL = { lat: 43.6535, lng: -79.3839 };
-
 	let now = $state(null);
 	let coords = $state(null); // { lat, lng } — lives only in this browser tab
 	let geoDenied = $state(false);
+	let placed = $state(null); // { lat, lng } the reader tapped on the map
 	let framed = $state(false);
 	let selfUrl = $state('');
 	let kind = $state(DEFAULT_SWIM_KIND);
@@ -48,7 +45,17 @@
 	let transitTimes = $state(null); // Map<location_id, { minutes, connections }>
 	let travelFailed = $state(false);
 
-	const origin = $derived(coords ?? CITY_HALL);
+	// Where we measure from — and there is no default. v3 never measures from
+	// a landmark and calls the result yours: a precisely routed trip from a
+	// place you are not standing is a worse lie than an approximate one from
+	// where you actually are. Either the browser tells us, or the reader
+	// does, or we have nothing to offer and say so.
+	const origin = $derived(coords ?? placed);
+	// The map asks the question. It also covers the framed case, where we
+	// refuse to raise a location prompt a hostile parent page could dress up
+	// — tapping a map raises no prompt, so it is the one way to answer that
+	// is safe inside a frame.
+	const needsPlace = $derived((geoDenied || framed) && !placed);
 
 	// Mapbox modes are fetched up front; transit is one request per pool
 	// against a free community service, so it's only ever asked for the pools
@@ -156,13 +163,26 @@
 		const candidates = poolsWithCoords().filter((p) => live.has(p.id) && !offered.has(p.id));
 		if (!candidates.length) return;
 
-		fetchTransitTimes(coords ?? CITY_HALL, candidates, {
+		fetchTransitTimes(origin, candidates, {
 			maxConnections: modeRule('transit').MAX_CONNECTIONS
 		}).then(
 			(map) => (transitTimes = new Map([...(transitTimes ?? []), ...map])),
 			(e) => console.warn('transit times unavailable:', e.message)
 		);
 	});
+
+	// The reader has told us where they are. Snapped like any other origin
+	// before it reaches a routing provider.
+	function setPlace(point) {
+		placed = snapToGrid(point);
+		loadTravelTimes();
+	}
+
+	function rePlace() {
+		placed = null;
+		travel = null;
+		travelFailed = false;
+	}
 
 	function selectKind(k) {
 		kind = k;
@@ -194,13 +214,12 @@
 			} catch {
 				// cross-origin parent blocked the navigation — stay put, no prompt
 			}
-			loadTravelTimes();
 			return;
 		}
 
 		if (!navigator.geolocation) {
 			geoDenied = true;
-			return loadTravelTimes();
+			return;
 		}
 		navigator.geolocation.getCurrentPosition(
 			(pos) => {
@@ -209,8 +228,9 @@
 				loadTravelTimes();
 			},
 			() => {
+				// No fix, so no origin yet — the map asks, and routing waits
+				// until it has an answer worth measuring from.
 				geoDenied = true;
-				loadTravelTimes();
 			},
 			{ maximumAge: 300_000, timeout: 15_000 }
 		);
@@ -248,17 +268,20 @@
 
 	{#if framed}
 		<p class="note">
-			Swimmm is embedded in another page, so it won't ask for your location.
-			<a href={selfUrl} target="_top" rel="noopener">Open Swimmm directly</a> for dips near you.
+			Swimmm is embedded in another page, so it won't ask your browser for your location — you can
+			place yourself below instead, or
+			<a href={selfUrl} target="_top" rel="noopener">open Swimmm directly</a>.
 		</p>
-	{:else if geoDenied}
+	{:else if placed}
 		<p class="note">
-			Without your location there's nothing to measure from, so these dips are from Nathan Phillips
-			Square. Your location is only ever used in your browser.
+			Measuring from the spot you picked on the map.
+			<button class="linklike" onclick={rePlace}>Move it</button>
 		</p>
 	{/if}
 
-	{#if !offer}
+	{#if needsPlace}
+		<PlaceMap onplace={setPlace} pools={data.schedule.locations ?? []} />
+	{:else if !offer}
 		<p class="status">Finding you a dip…</p>
 	{:else if offer.length === 0}
 		<p class="status">
