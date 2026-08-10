@@ -14,6 +14,13 @@ no map, no runtime backend; grayscale UI with one accent color.
 | `/` | the live site — where development happens |
 | `/v1` | archived snapshot: the main page as it stood |
 | `/v2` | archived snapshot: the design studies gallery (previously `/concepts`) |
+| `/concepts` | signpost to `/v2`, carrying the query string with it |
+
+Keeping `/concepts` alive is the same commitment the `/vN` scheme makes: an
+address that was published once keeps resolving. It redirects in the browser
+because GitHub Pages serves static files and can't issue a 301 (`static/_redirects`
+does it properly on Cloudflare), and it forwards `?c=`, `?at=` and `?kind=`
+rather than dumping deep links on the gallery's front page.
 
 The `/vN` routes are **archives, not branches**. Nothing new is built on them,
 and each is *sealed*: it owns its implementation under `src/routes/vN/lib/`

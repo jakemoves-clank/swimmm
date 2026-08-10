@@ -1,0 +1,7 @@
+# Used by Cloudflare Pages (GitHub Pages ignores this file — there, the
+# prerendered /concepts page redirects in the browser instead).
+#
+# /concepts was the design gallery's address before it was archived at /v2.
+# Cloudflare preserves the query string across a redirect, so deep links like
+# /concepts?c=almanac keep landing on the right concept.
+/concepts /v2 301
