@@ -243,6 +243,12 @@ on push, or when a pull request is opened or updated. Start it either way:
 The `run-tests` label has to exist in the repo before it can be applied; GitHub
 lets you create it inline the first time you add it.
 
+Label a PR **`preview`** and `deploy.yml` also builds it to
+`/swimmm/pr-<N>/`. Pages hosts one site per repo and each deploy replaces it
+wholesale, so every deploy rebuilds the root from `main` *plus* every labelled
+PR into a single artifact — which is what stops a push to `main` from wiping
+the previews. See DEPLOYMENT.md.
+
 `.github/workflows/deploy.yml` runs the unit suite too, as a step in its build
 job before the build itself — so a red suite fails the job before it uploads a
 Pages artifact, and nothing gets published. It costs no extra runner time (that

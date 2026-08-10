@@ -31,8 +31,11 @@
 
 <main>
 	<h1>This gallery moved</h1>
-	<!-- Seen only with JavaScript off, or for the instant before the redirect. -->
-	<p>The design studies are now at <a href={target}>{target}</a>.</p>
+	<!-- Seen only with JavaScript off, or for the instant before the redirect.
+	     The label is the canonical path; `target` is where it actually points,
+	     which under a base path (a /pr-N preview, or the project site itself)
+	     is resolved and relative, and reads like nonsense to a human. -->
+	<p>The design studies are now at <a href={target}>/v2</a>.</p>
 </main>
 
 <style>
