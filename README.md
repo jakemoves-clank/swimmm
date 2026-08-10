@@ -11,9 +11,23 @@ no map, no runtime backend; grayscale UI with one accent color.
 
 | Route | What |
 | --- | --- |
-| `/` | the main page — the current version, served at the root |
-| `/v1` | a pinned copy of the main page, so the root can move on without breaking a link |
-| `/v2` | the design studies gallery (previously `/concepts`) |
+| `/` | the live site — where development happens |
+| `/v1` | archived snapshot: the main page as it stood |
+| `/v2` | archived snapshot: the design studies gallery (previously `/concepts`) |
+
+The `/vN` routes are **archives, not branches**. Nothing new is built on them,
+and they are deliberately copies rather than refactored into shared components:
+the moment `/v1` renders something `/` also renders, a change to `/` rewrites
+what the snapshot shows, which is the one thing an archive must not do.
+
+They stay copies of the *route*, though, not of the whole app — both still
+import `$lib`, so upstream work does reach them. When it does, a snapshot
+showing an older reading of the day is the intended outcome. The bar they have
+to clear is that they still **render and stay explorable**: no throwing, no
+blank shell, no dead controls. `tests/e2e/archive.test.js` enforces exactly
+that and nothing more, so upstream data changes don't drag the archive's tests
+along with them; `tests/unit/archive-routes.test.js` guards the copies against
+a well-meant deduplication.
 
 ## Data — official City of Toronto only
 
