@@ -108,9 +108,14 @@
 						{/if}
 						{reachPhrase(dip)}
 					</p>
-					{#if dip.session.variant || dip.shortfallMin > 0}
+					{#if dip.session.variant || dip.shortfallMin > 0 || dip.location.approx}
 						<p class="aside">
 							{#if dip.session.variant}<span class="variant">{dip.session.variant}</span>{/if}
+							{#if dip.location.approx}
+								<span class="variant" title="The city publishes no location for this pool, so the trip is measured to the complex it sits in"
+									>approx. location</span
+								>
+							{/if}
 							{#if dip.shortfallMin > 0}
 								<span class="short"
 									>{dip.durationMin} min, not {dip.preferredMin} — the water goes at {fmtTime(

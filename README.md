@@ -81,8 +81,16 @@ and `DEPLOYMENT.md`). Local builds cache city downloads for ~20 h in
 `.city-cache/`; tests never contact the city (`SWIMMM_DATA_FILE`).
 
 Coordinates are joined by the shared Location ID, with a street-address
-fallback; one pool currently has no match in the city's geo data and is shown
-without a distance.
+fallback and then the row's `Parent Location ID` — the complex or park the
+pool sits inside. Two pools need that last step: Kidstown Water Park and
+Donald D. Summerville Olympic Pools are in the city's location list but
+absent from its facilities geo data under any name or address, while
+L'Amoreaux Sports Complex and Woodbine Beach Park, which contain them, are
+mapped. A borrowed point is the complex rather than the pool door, so it is
+flagged `approx` all the way through to the card, which says "approx.
+location" — being a few hundred metres out is worth far more to a reader
+than not being offered the pool at all, but only if nobody is misled about
+which it is. With that step every pool the city lists is now placed.
 
 Swimmm lists two kinds of drop-in swim, switchable with the Lane/Leisure
 toggle (`?kind=leisure` deep-links to it). Both are baked into the same

@@ -334,3 +334,15 @@ describe('buildDips, without routing', () => {
 		expect(buildDips(schedule, { ...opts, origin: null })).toEqual([]);
 	});
 });
+
+describe('a dip at a pool placed by its parent', () => {
+	it('carries the approximation, so the page can admit to it', () => {
+		const borrowed = { ...POOL, approx: true };
+		const d = buildDip(session(), borrowed, { routed: true, mode: 'walk', minutes: 20 }, { nowMin: NOW });
+		expect(d.location.approx).toBe(true);
+	});
+
+	it('is exact by default, so a missing flag never reads as approximate', () => {
+		expect(dip(session(), { mode: 'walk', minutes: 20 }).location.approx).toBe(false);
+	});
+});

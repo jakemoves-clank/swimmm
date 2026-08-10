@@ -166,3 +166,50 @@ describe('buildLocations', () => {
 		expect(summerville.lng).toBeNull();
 	});
 });
+
+// Two real pools — Kidstown Water Park and Donald D. Summerville Olympic
+// Pools — appear in the city's location list but nowhere in its facilities
+// geo data, by ID or by address. Both name a Parent Location ID that *is*
+// geocoded: the complex or park the pool sits inside. Inheriting that point
+// places the pool within a few hundred metres, which beats not offering it.
+describe('buildLocations, falling back to the parent facility', () => {
+	const geojson = {
+		features: [
+			{
+				properties: { LOCATIONID: 698, ADDRESS: '100 SILVER SPRINGS BLVD' },
+				geometry: { type: 'Point', coordinates: [-79.3063, 43.8047] }
+			}
+		]
+	};
+	const child = {
+		'Location ID': 352,
+		'Parent Location ID': 698,
+		'Location Name': 'Kidstown Water Park',
+		'Street No': '3159',
+		'Street Name': 'Birchmount',
+		'Street Type': 'Rd'
+	};
+
+	it('borrows the parent facility’s point when the pool has none of its own', () => {
+		const [pool] = buildLocations([child], geojson);
+		expect(pool).toMatchObject({ id: 352, lat: 43.8047, lng: -79.3063, approx: true });
+	});
+
+	// The borrowed point is the complex, not the pool door, so anything built
+	// on it has to be able to say so.
+	it('marks a borrowed point as approximate, and a pool’s own point as exact', () => {
+		const own = { ...child, 'Location ID': 698, 'Parent Location ID': 'None' };
+		const [pool] = buildLocations([own], geojson);
+		expect(pool.approx).toBe(false);
+	});
+
+	it('leaves a pool unplaced when its parent is not geocoded either', () => {
+		const [pool] = buildLocations([{ ...child, 'Parent Location ID': 999 }], geojson);
+		expect(pool).toMatchObject({ lat: null, lng: null, approx: false });
+	});
+
+	it('does not treat a pool as its own parent', () => {
+		const [pool] = buildLocations([{ ...child, 'Parent Location ID': 352 }], geojson);
+		expect(pool.lat).toBeNull();
+	});
+});

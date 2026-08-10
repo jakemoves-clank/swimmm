@@ -89,7 +89,13 @@ export function buildDip(
 			name: location.name,
 			address: location.address,
 			lat: location.lat,
-			lng: location.lng
+			lng: location.lng,
+			// The city never geocoded a couple of pools, so their point is
+			// borrowed from the complex they sit in (see server/transform.js).
+			// Every travel time built on one is out by the distance from the
+			// complex gate to the pool door, and the page says so rather than
+			// quietly rounding the difference away.
+			approx: location.approx === true
 		},
 		// True when a routing provider worked this out; false when all we have
 		// is the straight line. Every consumer has to face the difference —

@@ -110,17 +110,51 @@ export function buildLocations(locationsJson, geojson) {
 		const key = p.ADDRESS ? addressKey(p.ADDRESS) : null;
 		if (key && !byAddress.has(key)) byAddress.set(key, entry);
 	}
+	// The city's own row for each location, so a pool can look up the complex
+	// it belongs to when it has no geo entry of its own.
+	const rowsById = new Map(locationsJson.map((loc) => [String(loc['Location ID']), loc]));
+
+	// A pool's own point, by shared ID and then by street address.
+	function ownPoint(loc) {
+		const key = addressKey(formatAddress(loc));
+		return byId.get(String(loc['Location ID'])) || (key && byAddress.get(key)) || null;
+	}
+
 	return locationsJson.map((loc) => {
 		const id = loc['Location ID'];
 		const address = formatAddress(loc);
-		const key = addressKey(address);
-		const geo = byId.get(String(id)) || (key && byAddress.get(key)) || null;
+		let geo = ownPoint(loc);
+		let approx = false;
+
+		// Last resort: the parent facility. Two pools in the live data —
+		// Kidstown Water Park and Donald D. Summerville Olympic Pools — are in
+		// the city's location list but absent from its facilities geo data
+		// under any name or address, while the complex each sits inside is
+		// mapped. Borrowing the parent's point puts them within a few hundred
+		// metres of the truth, which is worth far more to a reader than being
+		// left off the map entirely — as long as everything downstream knows
+		// the point is approximate, hence the flag.
+		const parentId = loc['Parent Location ID'];
+		if (!geo && parentId != null && String(parentId) !== String(id)) {
+			const parent = rowsById.get(String(parentId));
+			const parentGeo =
+				byId.get(String(parentId)) || (parent ? ownPoint(parent) : null) || null;
+			if (parentGeo) {
+				geo = parentGeo;
+				approx = true;
+			}
+		}
+
 		return {
 			id,
 			name: part(loc['Location Name']),
 			address,
 			lat: geo ? geo.lat : null,
-			lng: geo ? geo.lng : null
+			lng: geo ? geo.lng : null,
+			// True when the point is the parent complex's rather than the
+			// pool's own. Never true for an unplaced pool: there is no point
+			// to be approximate about.
+			approx
 		};
 	});
 }
