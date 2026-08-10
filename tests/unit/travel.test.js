@@ -1,5 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import { chunkPools, matrixUrl, fetchTravelTimes, isReachable } from '../../src/lib/travel.js';
+import {
+	chunkPools,
+	matrixUrl,
+	fetchTravelTimes,
+	fetchTravelTimesFor,
+	isReachable
+} from '../../src/lib/travel.js';
 
 const origin = { lat: 43.66, lng: -79.4 };
 const pool = (id, lat, lng) => ({ id, lat, lng });
@@ -59,6 +65,36 @@ describe('fetchTravelTimes', () => {
 		});
 		const t = await fetchTravelTimes(origin, pools, 'pk.test', fetchImpl);
 		expect(t.get(1)).toEqual({ walk: null, bike: null });
+	});
+});
+
+describe('fetchTravelTimesFor', () => {
+	// Each mode is one more round trip to Mapbox, so v3 asks for driving and
+	// v1 — which has no use for it — must not start paying for it.
+	const spyFetch = () => {
+		const profiles = [];
+		const fetchImpl = async (url) => {
+			profiles.push(new URL(url).pathname.split('/')[4]);
+			return { ok: true, json: async () => ({ code: 'Ok', durations: [[0, 600]] }) };
+		};
+		return { profiles, fetchImpl };
+	};
+
+	it('asks Mapbox only for the modes it was told to', async () => {
+		const { profiles, fetchImpl } = spyFetch();
+		const t = await fetchTravelTimesFor(origin, [pool(1, 43.7, -79.5)], 'pk.test', {
+			modes: ['walk', 'drive'],
+			fetchImpl
+		});
+		expect(profiles.sort()).toEqual(['driving', 'walking']);
+		expect(t.get(1)).toEqual({ walk: 10, drive: 10 });
+	});
+
+	it('leaves the two-mode default alone, so /v1 makes no extra request', async () => {
+		const { profiles, fetchImpl } = spyFetch();
+		const t = await fetchTravelTimes(origin, [pool(1, 43.7, -79.5)], 'pk.test', fetchImpl);
+		expect(profiles.sort()).toEqual(['cycling', 'walking']);
+		expect(t.get(1)).toEqual({ walk: 10, bike: 10 });
 	});
 });
 
