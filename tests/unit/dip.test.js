@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildDip, buildDips, fitDuration, offerDips, planDay } from '../../src/lib/dip.js';
+import { buildDip, buildDips, dayTail, fitDuration, offerDips, planDay } from '../../src/lib/dip.js';
 import { DEFAULT_DIP_DURATION_MIN, DIP_SELECTION } from '../../src/lib/config.js';
 
 const POOL = { id: 1, name: 'Regent Park', address: '640 Dundas St E', lat: 43.66, lng: -79.36 };
@@ -259,6 +259,62 @@ describe('planDay', () => {
 			maxDaysAhead: 1
 		});
 		expect(p.dips).toEqual([]);
+	});
+});
+
+// A planner that simply stops has said two different things at once: "that
+// is the last swim" and "that is the last one I am showing you". dayTail is
+// how the page tells them apart — and it only ever reports what it can
+// check, so a day with more water left says nothing at all.
+describe('dayTail', () => {
+	const schedule = {
+		locations: [
+			{ id: 1, name: 'Near', address: '1 St', lat: 43.66, lng: -79.4 },
+			{ id: 2, name: 'Far', address: '2 St', lat: 43.805, lng: -79.19 }
+		],
+		sessions: [
+			{ location_id: 1, course_id: 1, kind: 'lane', title: 'Lane Swim', date: 'today', start_min: 840, end_min: 900 },
+			{ location_id: 2, course_id: 2, kind: 'lane', title: 'Lane Swim', date: 'today', start_min: 1020, end_min: 1140 },
+			{ location_id: 1, course_id: 3, kind: 'leisure', title: 'Leisure', date: 'today', start_min: 1080, end_min: 1200 }
+		]
+	};
+	const travel = new Map([[1, { walk: 10 }]]);
+	const opts = (over = {}) => ({
+		now: { date: 'today', minutes: NOW },
+		travel,
+		origin: { lat: 43.66, lng: -79.4 },
+		kind: 'lane',
+		preferredMin: 45,
+		...over
+	});
+
+	it('counts the swims of this kind still to come after the last one offered', () => {
+		const offered = offerDips(schedule, opts());
+		// The 5 p.m. lane swim at Far: still on today, and not on offer.
+		expect(dayTail(schedule, opts(), offered)).toEqual({ sessions: 1, offerable: 0 });
+	});
+
+	it('says the day is done when nothing of this kind is left', () => {
+		const opt = opts({ kind: 'leisure', travel: new Map([[1, { walk: 10 }]]) });
+		const offered = offerDips(schedule, opt);
+		expect(offered).not.toHaveLength(0);
+		expect(dayTail(schedule, opt, offered)).toEqual({ sessions: 0, offerable: 0 });
+	});
+
+	// The one case where the planner must keep quiet: there is more water, we
+	// could get you to it, and we simply chose a handful.
+	it('reports what is left as offerable when we could still get you there', () => {
+		const reachable = new Map([
+			[1, { walk: 10 }],
+			[2, { walk: 12 }]
+		]);
+		const opt = opts({ travel: reachable });
+		const offered = offerDips(schedule, opt).filter((d) => d.location.id === 1);
+		expect(dayTail(schedule, opt, offered)).toEqual({ sessions: 1, offerable: 1 });
+	});
+
+	it('has nothing to say about a day with no dips on it', () => {
+		expect(dayTail(schedule, opts(), [])).toEqual({ sessions: 0, offerable: 0 });
 	});
 });
 

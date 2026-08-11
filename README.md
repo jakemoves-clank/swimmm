@@ -172,7 +172,10 @@ spread so no two overlap in the water by more than 10 minutes and no pool
 appears more than twice — so a reader with a free afternoon can ask "I'm free
 between 2 and 4, what are my options?" rather than being told about 2 p.m.
 five times. When the day genuinely offers nothing else the spread rule gives
-way and overlapping dips are shown anyway, drawn side by side.
+way and overlapping dips are shown anyway, drawn side by side — but never
+more than `MAX_CONCURRENT` (two) at a time, because another option is only
+worth having if it answers a different question, and a column split five ways
+is type nobody can read.
 
 **Which day** — `planDay` shows today whenever today still has a reachable
 swim ahead of the clock, and otherwise the next day that does, up to a week
@@ -192,21 +195,39 @@ down the page *is* time. The scale is computed from the height available
 rather than fixed, and the axis starts at now, so the whole offer fits one
 screen: the morning you slept through is not an option you can take, and the
 question ("when could I go?") is about the shape of the day, which you cannot
-see a screenful at a time. Each dip carries the
-hatched run of its trip immediately above it: the thing a wall calendar can
-never tell you, and the reason a dip is an appointment rather than an opening
-time. The layout arithmetic (`src/lib/dips/layout.js`) is separate from the
-component and unit-tested, including the calendar-style packing for the
-uncommon overlapping case.
+see a screenful at a time. Each dip carries its
+trip immediately above it — a hairline from departure to water, ticked at the
+departure end and labelled there with a mode icon — which is the thing a wall
+calendar can never tell you, and the reason a dip is an appointment rather
+than an opening time. The line runs on down the side of the block, so the
+journey and the swim read as one appointment; only the part above the block
+is the travel time.
+
+Two dips clash, and go side by side, when they clash *in the water*. A later
+dip whose trip line would run through an earlier block is not a clash — the
+column is the page's scarcest currency and that would spend it on a collision
+the reader never sees — so the two stack full width and the later line runs
+down the far side of the column instead, the block it passes stepping in by a
+gutter to let it through. The layout arithmetic (`src/lib/dips/layout.js`) is
+separate from the component and unit-tested, including the calendar-style
+packing for the uncommon overlapping case.
+
+At the foot of the axis the planner says whether the day is actually done —
+"no more lane swims today", or how many are left that we couldn't get you to
+in time. It says nothing at all when there is more water we could have
+offered and simply chose a handful, because then running out of blocks is
+honest. The arithmetic is `dayTail` in `src/lib/dip.js`.
 
 ### Where are you?
 
-There is no default origin. Decline the location prompt — or open the page in
-a frame, where it still refuses to raise a prompt a hostile parent could dress
-up — and it asks: a silhouette of Toronto with the city's pools marked, which
-you tap to place yourself. A precisely routed trip from a place you are not
-standing is a worse lie than an approximate one from where you are. The pools
-earn their place as landmarks; a bare outline is hard to find yourself on.
+There is no default origin, and nothing is asked until a reader asks for it.
+The page opens on the question: a "use live location" button — the only thing
+in v3 that raises a browser prompt — over a silhouette of Toronto you can tap
+to place yourself. (In a frame it refuses to raise a prompt a hostile parent
+could dress up, and the map answers the same question anyway.) A precisely
+routed trip from a place you are not standing is a worse lie than an
+approximate one from where you are. The pin in the header is the way back to
+it, whichever way you answered.
 Arrow keys move the marker about a kilometre a press (five with shift) and
 Enter confirms, so it is not a tap-only control. No tiles and no third-party
 map: the projection is forty lines in `src/lib/dips/placemap.js`.

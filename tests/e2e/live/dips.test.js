@@ -79,6 +79,16 @@ test('says on the trip line how you would be getting there', async ({ page }) =>
 	await expect(page.locator('.trip-rule .mode')).toHaveCount(1);
 });
 
+// A planner that simply runs out of blocks is saying "that was the last swim
+// today" and "that was the last one I picked for you" in the same silence.
+test('says so at the foot of the day when there is no more water', async ({ page }) => {
+	await openWithLocation(page, '/');
+
+	// The seed's only other lane swim today is Faraway Pool's, which finished
+	// before this one starts — so today really is done.
+	await expect(page.getByText('no more lane swims today')).toBeVisible();
+});
+
 test('offers nothing at a pool no mode can reach in time', async ({ page }) => {
 	await openWithLocation(page, '/');
 
@@ -213,6 +223,24 @@ test.describe('when the browser will not say where you are', () => {
 		// nav, which is also the way back to the map.
 		await expect(page.getByRole('button', { name: /Change where you/ })).toBeVisible();
 		await expect(page.locator('.dip').first()).toContainText('Nearby Pool');
+	});
+
+	// The pin is the only way back to the map, and it once threw on a stale
+	// variable before it got as far as clearing the tapped point: it worked
+	// for a reader whose browser had answered and did nothing at all for one
+	// who had tapped. Both ways in, both ways back.
+	test('takes you back to the map from a point you tapped', async ({ page, context }) => {
+		await context.setGeolocation(null).catch(() => {});
+		await page.goto('/');
+
+		const map = page.locator('button.map');
+		const box = await map.boundingBox();
+		await map.click({ position: { x: box.width * 0.45, y: box.height * 0.62 } });
+		await expect(page.locator('.dip').first()).toBeVisible();
+
+		await page.getByRole('button', { name: /Change where you/ }).click();
+		await expect(page.locator('button.map')).toBeVisible();
+		await expect(page.locator('.dip')).toHaveCount(0);
 	});
 
 	// A map you can only tap is a map some people cannot use.

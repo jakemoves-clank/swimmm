@@ -187,6 +187,37 @@ export function offerDips(schedule, opts) {
 	return selectDips(rankDips(buildDips(schedule, opts)), opts);
 }
 
+/**
+ * What the day still holds after the last dip on offer.
+ *
+ * A planner that simply runs out of blocks is saying two things at once —
+ * "that was the last swim today" and "that was the last one I chose to show
+ * you" — and they are very different answers to "should I wait until later?".
+ * This is the arithmetic behind telling them apart; the page turns it into a
+ * line of type, or into nothing at all when there is more water we could
+ * still get you to.
+ *
+ * @param offered  the dips actually on the planner
+ * @returns { sessions, offerable } — swims of this kind starting after the
+ *          last offered dip is out of the water, and how many of those we
+ *          could still build a dip from.
+ */
+export function dayTail(schedule, opts, offered) {
+	if (!offered?.length) return { sessions: 0, offerable: 0 };
+	const after = Math.max(...offered.map((d) => d.end_min));
+
+	const sessions = (schedule.sessions ?? []).filter(
+		(s) => s.date === opts.now.date && s.kind === opts.kind && s.start_min >= after
+	).length;
+	if (!sessions) return { sessions: 0, offerable: 0 };
+
+	// Only worth the second pass when there is something to count: a dip we
+	// could offer is one we chose not to, which is our business and not
+	// something to announce.
+	const offerable = buildDips(schedule, opts).filter((d) => d.start_min >= after).length;
+	return { sessions, offerable };
+}
+
 // How many days ahead the concierge will look before admitting defeat. The
 // city publishes a rolling window of a few weeks, and an offer eight days
 // out isn't an offer — but a long weekend can shut the pools for three days

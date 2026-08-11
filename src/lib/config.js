@@ -140,10 +140,17 @@ export const APPEAL = {
 // MAX_PER_POOL: the nearest pool often runs four sessions in a day, and a
 // concierge that answers "Regent Park, Regent Park, Regent Park" is a
 // directory with extra steps.
+// MAX_CONCURRENT: how many dips may be in the water at the same moment. The
+// clash rule above only pushes a dip down the ranking, so on a busy evening
+// the fill pass used to hand back five swims that all start at five past —
+// one question answered five times, in a column split five ways, with the
+// pool names wrapping to three lines and the trip cut off the bottom. Two is
+// a choice; more is a crowd, and the page cannot draw it legibly.
 export const DIP_SELECTION = {
 	COUNT: 5,
 	MAX_OVERLAP_MIN: 10,
-	MAX_PER_POOL: 2
+	MAX_PER_POOL: 2,
+	MAX_CONCURRENT: 2
 };
 
 // "Top pick" tiers, tried in order. A session qualifies for a tier when it

@@ -9,7 +9,7 @@
 	import { torontoNow } from '$lib/time.js';
 	import { fetchTravelTimesFor } from '$lib/travel.js';
 	import { fetchTransitTimes } from '$lib/transit.js';
-	import { planDay } from '$lib/dip.js';
+	import { dayTail, planDay } from '$lib/dip.js';
 	import { MODES, modeRule } from '$lib/appeal.js';
 	import { dayLabel, freshnessLabel } from '$lib/labels.js';
 	import DayPlanner from './DayPlanner.svelte';
@@ -125,6 +125,35 @@
 
 	const otherKind = $derived(SWIM_KINDS.find((k) => k !== kind));
 
+	// The line at the foot of the planner. A planner that just stops has said
+	// "that was the last swim today" and "that was the last one I picked" in
+	// exactly the same silence, and the reader has no way to tell whether
+	// waiting until seven would help. So: say the day is done when it is, say
+	// what is left when we couldn't get you to any of it — and say nothing at
+	// all when there is more water we could have offered, because then the
+	// silence is honest.
+	const closing = $derived.by(() => {
+		if (!plan?.dips.length) return '';
+		const tail = dayTail(
+			data.schedule,
+			{
+				now: { date: plan.date, minutes: plan.nowMin },
+				travel: travelWithTransit,
+				origin,
+				kind,
+				preferredMin
+			},
+			plan.dips
+		);
+		const noun = SWIM_KIND_NOUNS[kind];
+		const when = plan.isToday ? 'today' : whichDay;
+		if (tail.sessions === 0) return `no more ${noun}s ${when}`;
+		if (tail.offerable === 0) {
+			return `${tail.sessions} more ${noun}${tail.sessions === 1 ? '' : 's'} ${when}, none we could get you to in time`;
+		}
+		return '';
+	});
+
 	function poolsWithCoords() {
 		const seen = new Map();
 		for (const l of data.schedule.locations ?? []) {
@@ -191,9 +220,17 @@
 	// Back to the map, whichever way we got here: a reader who let the browser
 	// answer should be able to change their mind as easily as one who tapped,
 	// so this clears the browser's fix too rather than leaving it to win.
+	//
+	// It used to clear a `geoDenied` that no longer existed — the state became
+	// liveStatus and this line was left behind. A module is strict-mode code,
+	// so the assignment threw rather than quietly creating a global, and it
+	// threw *before* `placed = null`: pressing the pin worked for a reader
+	// whose browser had answered (coords was already cleared by then) and did
+	// nothing at all for one who had tapped the map. Hence "sometimes".
+	// liveStatus is deliberately not reset: a denial sticks to the origin, and
+	// pretending the button might work this time is a worse offer than the map.
 	function rePlace() {
 		coords = null;
-		geoDenied = false;
 		placed = null;
 		travel = null;
 		travelFailed = false;
@@ -348,7 +385,7 @@
 				{whichDay}.
 			</p>
 		{/if}
-		<DayPlanner dips={offer} nowMin={plan.isToday ? plan.nowMin : null} {transitVia} />
+		<DayPlanner dips={offer} nowMin={plan.isToday ? plan.nowMin : null} {transitVia} {closing} />
 		{#if unplacedCount > 0}
 			<p class="note">
 				{unplacedCount}
@@ -448,13 +485,18 @@
 		display: flex;
 		gap: 0.75rem;
 	}
+	/* The unselected half is the only thing in this control you can *do*, so
+	   it is the half painted in the pressable colour. It read as grey — the
+	   same grey as the axis labels — which said "disabled" about the one word
+	   on the page a reader is most likely to want to press. The selected half
+	   is state, not an offer, so it stays ink. */
 	.kinds button {
 		border: 0;
 		background: none;
 		padding: 0 0 2px;
 		font: inherit;
 		font-size: 0.8125rem;
-		color: var(--gray-400);
+		color: var(--interactive);
 		cursor: pointer;
 	}
 	/* A shadow rather than a border, because a border is part of the box: the
@@ -466,20 +508,18 @@
 		color: var(--ink);
 		box-shadow: 0 1px 0 var(--ink);
 	}
-	/* Quiet until it is looked at: at rest it matches the unselected half of
-	   the toggle, and only says "pressable" when a pointer or the keyboard
-	   arrives on it. */
+	/* Pressable, and painted like it — like the toggle beside it, and like
+	   every other pressable thing on the page. It used to be grey until
+	   hovered, which on a phone meant blue only *after* it had been tapped:
+	   the same button in two colours, neither of them explained, and the
+	   sticky :hover deciding which one you saw. */
 	.pin {
 		border: 0;
 		background: none;
 		padding: 0;
 		display: flex;
-		color: var(--gray-400);
-		cursor: pointer;
-	}
-	.pin:hover,
-	.pin:focus-visible {
 		color: var(--interactive);
+		cursor: pointer;
 	}
 	.status {
 		color: var(--gray-600);

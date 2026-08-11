@@ -30,7 +30,11 @@
 	// streetcar — keyed by pool. It is a lookup rather than a field on the dip
 	// because it changes nothing about the offer: appeal.js scores every
 	// transit trip alike, and only the icon can tell the three apart.
-	let { dips, nowMin, transitVia = new Map() } = $props();
+	//
+	// closing is the day's full stop, or '' when there isn't one to draw: see
+	// dayTail. A planner that just runs out of blocks is saying "that was the
+	// last swim" and "that was the last one I picked" in the same silence.
+	let { dips, nowMin, transitVia = new Map(), closing = '' } = $props();
 
 	// The scale floor. Below about this, a 30-minute dip is too short to hold
 	// its own name and the planner stops being readable — so past this point
@@ -44,15 +48,17 @@
 	// The variant ("Long Course (50m)") is the first thing to go: it qualifies
 	// the swim rather than describing the appointment.
 	const VARIANT_PX = 88;
-	// Below this the rule is shorter than the icon that would sit on it. Most
+	// Below this there is no room under the tick for the icon to sit in. Most
 	// trips are short — a ten-minute walk is ten pixels at a tight scale — so
-	// the threshold is the icon's own height and no more; the words in the
-	// block still say the mode when it goes.
-	const ICON_MIN_PX = 11;
+	// the threshold is the tick plus the icon's own height and no more; the
+	// tick still marks the departure when the icon goes, and the words in the
+	// block still say the mode.
+	const ICON_MIN_PX = 15;
 	// What sits below the planner: the footer line, the page's bottom padding,
 	// and any note about pools the city never placed. Erring generous costs a
 	// few pixels of scale; erring mean costs a scrollbar.
 	const BELOW_PX = 44;
+	const CLOSING_PX = 20;
 
 	let el = $state(null);
 	let avail = $state(0);
@@ -80,11 +86,12 @@
 	// The cost is that the fit is to the *large* viewport, so a little of the
 	// last dip can sit under a shown toolbar; BELOW_PX absorbs most of it, and
 	// a page that scrolls is the honest answer to the rest.
-	function measure(_offer) {
+	function measure(..._deps) {
 		if (!el) return;
 		let top = 0;
 		for (let node = el; node; node = node.offsetParent) top += node.offsetTop;
-		avail = Math.max(0, document.documentElement.clientHeight - top - BELOW_PX);
+		const below = BELOW_PX + (closing ? CLOSING_PX : 0);
+		avail = Math.max(0, document.documentElement.clientHeight - top - below);
 	}
 
 	// The offer is passed in rather than read inside so the dependency can't be
@@ -93,8 +100,8 @@
 	// change comes through `resize` — which fires for an iOS toolbar collapse
 	// too, but re-reading clientHeight then simply gives the same number.
 	$effect(() => {
-		measure(dips);
-		const onResize = () => measure(dips);
+		measure(dips, closing);
+		const onResize = () => measure(dips, closing);
 		window.addEventListener('resize', onResize);
 		return () => window.removeEventListener('resize', onResize);
 	});
@@ -208,7 +215,7 @@
 		{/if}
 
 		<ol class="blocks">
-			{#each laid as { dip, lane, lanes } (dip.id)}
+			{#each laid as { dip, lane, lanes, tripSide, gutter } (dip.id)}
 				{@const h = (dip.end_min - dip.start_min) * scale}
 				{@const terse = h < TERSE_PX}
 				{@const tripH = dip.routed ? (dip.start_min - dip.leaveBy) * scale : 0}
@@ -216,21 +223,26 @@
 					class="slot"
 					class:in-progress={dip.inProgress}
 					class:unrouted={!dip.routed}
+					class:gutter
 					style="top: {y(dip.start_min)}px; height: {h}px; left: calc({(lane / lanes) *
 						100}% + {lane ? 0.2 : 0}rem); width: calc({(1 / lanes) * 100}% - {lanes > 1
 						? 0.2
 						: 0}rem)"
 				>
 					<!-- The trip, drawn where it happens: a rule from when you would
-					     leave to when you would be in the water. The concept hatched
-					     this band; a hairline and a tick say the same thing with a
-					     twentieth of the ink. -->
+					     leave to when you would be in the water, carrying on down the
+					     side of the block so the journey and the swim read as one
+					     appointment rather than a line and a box near each other. The
+					     length above the block is the travel time and only that — the
+					     block's own top edge is where the water starts. The concept
+					     hatched this band; a hairline and a tick say the same thing
+					     with a twentieth of the ink. -->
 					{#if dip.routed && dip.leaveBy < dip.start_min}
 						{@const showIcon = tripH >= ICON_MIN_PX}
 						<span
 							class="trip-rule"
-							class:ticked={!showIcon}
-							style="top: {(dip.leaveBy - dip.start_min) * scale}px; height: {tripH}px"
+							class:right={tripSide === 'right'}
+							style="top: {(dip.leaveBy - dip.start_min) * scale}px; height: {tripH + h - 2}px"
 							aria-hidden="true"
 						>
 							{#if showIcon}{@render modeIcon(iconFor(dip))}{/if}
@@ -277,6 +289,11 @@
 			{/each}
 		</ol>
 	</div>
+	<!-- The day's full stop. Only ever drawn when it can be checked: see
+	     dayTail, and the two sentences the page builds from it. -->
+	{#if closing}
+		<p class="closing">{closing}</p>
+	{/if}
 </div>
 
 <style>
@@ -346,15 +363,31 @@
 	}
 	.slot {
 		position: absolute;
+		/* So the block's own type can answer to the width it actually got:
+		   two dips at once halves the column, and a line that fits at full
+		   width sets four words to a line at half of it. */
+		container-type: inline-size;
 	}
+	/* Above the block rather than behind it, because it now runs down the
+	   block's side and a hairline under a pale ground is no hairline at all. */
 	.trip-rule {
 		position: absolute;
 		left: 0;
 		width: 0;
 		border-left: 1px solid var(--trip-rule);
-		z-index: 0;
+		z-index: 2;
 	}
-	.trip-rule.ticked::before {
+	/* The far edge, for a line that would otherwise run straight through an
+	   earlier block in the same column — see layout.js. The block it passes
+	   steps in by the gutter below, so the line has clear page to run down. */
+	.trip-rule.right {
+		left: auto;
+		right: 0;
+	}
+	.slot.gutter .dip {
+		width: calc(100% - 0.95rem);
+	}
+	.trip-rule::before {
 		/* The departure itself: a tick you can put a finger on. */
 		content: '';
 		position: absolute;
@@ -363,23 +396,23 @@
 		width: 5px;
 		border-top: 1px solid var(--trip-rule);
 	}
-	/* Sat on the rule rather than beside it, with the page showing through
-	   behind it, so the icon reads as a label on the line and not as a second
-	   mark near it. */
-	/* On the departure end, not the middle. Centred on the line it would
-	   otherwise interrupt, it reads as the mark the trip starts from — the
-	   line runs out of the icon and down to the water — instead of as a break
-	   halfway along. It also survives a short trip, which the middle did not:
-	   there is always a top, and most trips are only a few minutes long. */
+	/* Tucked into the corner the tick and the line make, at the departure end:
+	   it labels the moment the trip starts and leaves the line's length — the
+	   travel time, which is the number here — unbroken and uninterrupted.
+	   (Sitting *on* the line, centred, it cut the rule in two and made a short
+	   trip look like a long one with a gap in it.) The paper behind it is for
+	   the flipped case, where the corner can fall beside a block. */
 	.mode {
 		position: absolute;
-		top: 0;
-		left: 1px;
-		transform: translate(-50%, -50%);
+		top: 2px;
+		left: 2px;
 		display: block;
 		color: var(--gray-500);
 		background: var(--paper);
-		border-radius: 50%;
+	}
+	.trip-rule.right .mode {
+		left: auto;
+		right: 2px;
 	}
 	/* No border, no radius, no shadow: a pale ground is all it takes to read
 	   as a block against the rules, and the rest was decoration.
@@ -477,5 +510,24 @@
 		color: var(--gray-600);
 		margin-left: auto;
 		flex: none;
+	}
+	/* Half a column is about ten rems on a phone, and at that width the
+	   qualifiers stop being read and start being wrapped: "· open until 8pm"
+	   breaking over three lines is what a reader sees, not what it says. The
+	   name, the window and the trip are the appointment; the rest is
+	   commentary, and commentary is what a narrow measure gives up first. */
+	@container (max-width: 11rem) {
+		.until,
+		.variant {
+			display: none;
+		}
+	}
+	/* The end of the day, level with the end of the axis. Grey, small, and one
+	   line: it is a fact about the schedule, not a heading. */
+	.closing {
+		margin: 0.35rem 0 0;
+		font-size: 0.6875rem;
+		line-height: 1.35;
+		color: var(--gray-400);
 	}
 </style>

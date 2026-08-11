@@ -37,22 +37,41 @@ describe('layoutDips', () => {
 		expect(laid.every((l) => l.lanes === 2)).toBe(true);
 	});
 
-	// The trip is drawn above its own block, in its own column, so a dip's ink
-	// begins when you would leave rather than when you get in. Judged on the
-	// water alone these two never meet; judged on the ink, the earlier block
-	// is sitting on top of the later one's trip line and hiding it.
-	it('counts an earlier block covering a later block’s trip line as a clash', () => {
+	// Two dips that share no water but whose trip lines cross each other's
+	// blocks used to be split into two half-width columns — the page paying
+	// for a clash the reader cannot see, in the one currency it is short of.
+	// They stack instead, and the later dip's line goes down the other side
+	// of the column, clearing the block it would have run through.
+	it('stacks two dips whose only clash is the later one’s trip', () => {
 		const laid = layoutDips([dip(600, 645), dip(660, 705, { leaveBy: 640 })]);
-		expect(laid.map((l) => l.lane)).toEqual([0, 1]);
-		expect(laid.every((l) => l.lanes === 2)).toBe(true);
-	});
-
-	it('leaves both at full width when the trip starts after the earlier block ends', () => {
-		const laid = layoutDips([dip(600, 645), dip(660, 705, { leaveBy: 650 })]);
 		expect(laid.map((l) => [l.lane, l.lanes])).toEqual([
 			[0, 1],
 			[0, 1]
 		]);
+		expect(laid[1].tripSide).toBe('right');
+		// …and the block it passes gives up the width for it to pass in.
+		expect(laid[0].gutter).toBe(true);
+	});
+
+	it('keeps the trip on the near side when it crosses nothing', () => {
+		const laid = layoutDips([dip(600, 645), dip(660, 705, { leaveBy: 650 })]);
+		expect(laid.map((l) => l.tripSide)).toEqual(['left', 'left']);
+		expect(laid.some((l) => l.gutter)).toBe(false);
+	});
+
+	// A block in the *other* column is not in the way: the two lines never
+	// share an x, so flipping would buy nothing and cost the gutter.
+	it('ignores a block the trip line passes beside rather than through', () => {
+		const laid = layoutDips([dip(600, 660), dip(630, 690), dip(675, 720, { leaveBy: 665 })]);
+		// The last dip is back in the left column, and the only block in the
+		// water while its trip runs is in the right one.
+		expect(laid[2].tripSide).toBe('left');
+		// The middle one is the case that decides what "in the way" means: its
+		// near edge *is* the first block's right edge, so a line down it would
+		// run along that block rather than beside it. It goes to the far side,
+		// where it has its own column's edge to itself and costs no gutter.
+		expect(laid[1].tripSide).toBe('right');
+		expect(laid.some((l) => l.gutter)).toBe(false);
 	});
 
 	// A dip we couldn't route has no departure time and so draws no trip line

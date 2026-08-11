@@ -141,15 +141,26 @@ function overlapMin(a, b) {
  * MAX_OVERLAP_MIN, no more than MAX_PER_POOL at any one pool — so that a
  * reader with a free afternoon can see what each part of it holds. The
  * second pass fills any remaining room with the best of what's left,
- * clashes and all, because "here are three options at 2 p.m." is a better
- * answer than a half-empty page. Callers must therefore expect overlapping
- * dips and draw them properly; they're uncommon, not exceptional.
+ * clashes and all, because "here are two options at 2 p.m." is a better
+ * answer than a half-empty page.
+ *
+ * Both passes stop at MAX_CONCURRENT dips in the water at once, so callers
+ * still have to draw overlapping dips — but never more of them side by side
+ * than a single column can set type in. A reader only wants another option
+ * if it answers a different question, and a sixth pool open at five past
+ * five does not.
  */
 export function selectDips(ranked, { count = DIP_SELECTION.COUNT } = {}) {
 	const picked = [];
 	const perPool = new Map();
 
 	const roomAtPool = (dip) => (perPool.get(dip.location?.id) ?? 0) < DIP_SELECTION.MAX_PER_POOL;
+	// How many of the picked dips this one would share water with. Counted
+	// against the candidate rather than across the day: three dips in an
+	// evening that overlap only their neighbours are three separate answers,
+	// and the column packs them two abreast at worst.
+	const roomInTheWater = (dip) =>
+		picked.filter((p) => overlapMin(p, dip) > 0).length < DIP_SELECTION.MAX_CONCURRENT;
 	const take = (dip) => {
 		picked.push(dip);
 		perPool.set(dip.location?.id, (perPool.get(dip.location?.id) ?? 0) + 1);
@@ -158,13 +169,13 @@ export function selectDips(ranked, { count = DIP_SELECTION.COUNT } = {}) {
 	for (const dip of ranked) {
 		if (picked.length >= count) break;
 		const clashes = picked.some((p) => overlapMin(p, dip) > DIP_SELECTION.MAX_OVERLAP_MIN);
-		if (!clashes && roomAtPool(dip)) take(dip);
+		if (!clashes && roomAtPool(dip) && roomInTheWater(dip)) take(dip);
 	}
 
 	if (picked.length < count) {
 		for (const dip of ranked) {
 			if (picked.length >= count) break;
-			if (!picked.includes(dip) && roomAtPool(dip)) take(dip);
+			if (!picked.includes(dip) && roomAtPool(dip) && roomInTheWater(dip)) take(dip);
 		}
 	}
 

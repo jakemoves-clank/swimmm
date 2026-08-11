@@ -129,12 +129,28 @@ describe('selectDips', () => {
 		expect(picked.map((d) => d.start_min)).toContain(1020);
 	});
 
-	it('still fills the handful with overlapping dips when the day offers nothing else', () => {
+	// Six pools open at 2 p.m. is one question, not six. A reader only needs
+	// another option if it answers something different — and a column split
+	// six ways is type too narrow to read, which is how this was noticed.
+	it('will not crowd one hour with more dips than the column can hold', () => {
 		const clashing = Array.from({ length: 6 }, (_, i) =>
 			at(840, { travelMin: 3 + i, location: { id: i, name: `Pool ${i}` } })
 		);
 		const picked = selectDips(rankDips(clashing));
-		expect(picked).toHaveLength(DIP_SELECTION.COUNT);
+		expect(picked).toHaveLength(DIP_SELECTION.MAX_CONCURRENT);
+	});
+
+	// The cap is on how many run *at once*, not on the day: a third dip that
+	// clears the first two is still a different question and still offered.
+	it('counts the crowd at an instant, not over the day', () => {
+		const picked = selectDips(
+			rankDips([
+				at(840, { travelMin: 3, location: { id: 1, name: 'A' } }),
+				at(850, { travelMin: 4, location: { id: 2, name: 'B' } }),
+				at(900, { travelMin: 5, location: { id: 3, name: 'C' } })
+			])
+		);
+		expect(picked.map((d) => d.start_min)).toEqual([840, 850, 900]);
 	});
 
 	it('does not offer the same pool over and over', () => {
