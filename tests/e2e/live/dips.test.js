@@ -211,7 +211,7 @@ test.describe('when the browser will not say where you are', () => {
 
 		// The sentence about where we are measuring from is now a pin in the
 		// nav, which is also the way back to the map.
-		await expect(page.getByRole('button', { name: /Move the spot/ })).toBeVisible();
+		await expect(page.getByRole('button', { name: /Change where you/ })).toBeVisible();
 		await expect(page.locator('.dip').first()).toContainText('Nearby Pool');
 	});
 
@@ -225,7 +225,7 @@ test.describe('when the browser will not say where you are', () => {
 		await page.keyboard.press('ArrowDown');
 		await page.keyboard.press('Enter');
 
-		await expect(page.getByRole('button', { name: /Move the spot/ })).toBeVisible();
+		await expect(page.getByRole('button', { name: /Change where you/ })).toBeVisible();
 	});
 });
 

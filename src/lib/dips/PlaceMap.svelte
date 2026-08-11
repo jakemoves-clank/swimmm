@@ -15,7 +15,14 @@
 	// snapped to a ~50 m grid before any routing provider sees it anyway.
 	import { TORONTO_OUTLINE } from '$lib/geo/torontoOutline.js';
 	import { TORONTO_CONTEXT } from '$lib/geo/torontoContext.js';
-	import { cityBounds, makeProjection, outlinePath, ringsPath, linesPath } from './placemap.js';
+	import {
+		cityBounds,
+		makeProjection,
+		outlinePath,
+		outlinePoints,
+		ringsPath,
+		linesPath
+	} from './placemap.js';
 
 	// liveStatus: 'idle' — the button is there to be pressed; 'asking' — the
 	// browser is deciding; 'denied' — it said no, and saying it again is not
@@ -26,7 +33,7 @@
 
 	const BOX = { w: 320, h: 210 };
 	const bounds = cityBounds(TORONTO_OUTLINE);
-	const projection = makeProjection(bounds, BOX.w, BOX.h);
+	const projection = makeProjection(bounds, BOX.w, BOX.h, outlinePoints(TORONTO_OUTLINE));
 	const path = outlinePath(TORONTO_OUTLINE, projection);
 
 	// What you actually navigate by. A bare silhouette is close to unusable as

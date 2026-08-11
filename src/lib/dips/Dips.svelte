@@ -188,7 +188,12 @@
 		loadTravelTimes();
 	}
 
+	// Back to the map, whichever way we got here: a reader who let the browser
+	// answer should be able to change their mind as easily as one who tapped,
+	// so this clears the browser's fix too rather than leaving it to win.
 	function rePlace() {
+		coords = null;
+		geoDenied = false;
 		placed = null;
 		travel = null;
 		travelFailed = false;
@@ -277,12 +282,12 @@
 			     had just done. A pin says the same and asks nothing until it is
 			     wanted — but only ever as well as a name a screen reader can
 			     read, because an icon alone is a button labelled with a guess. -->
-			{#if placed}
+			{#if origin}
 				<button
 					class="pin"
 					onclick={rePlace}
-					title="Measuring from the spot you picked — move it"
-					aria-label="Move the spot you're measuring from"
+					title="Change where you're measuring from"
+					aria-label="Change where you're measuring from"
 				>
 					<svg
 						viewBox="0 0 24 24"
@@ -400,7 +405,16 @@
 	:global(body) {
 		height: 100%;
 	}
+	/* Mobile Safari's pull-to-refresh rubber-bands the page, and the planner
+	   sizes itself from the viewport — so the gesture was rescaling the whole
+	   day mid-pull. Containing the overscroll keeps the gesture from starting;
+	   the measurement is also clamped against a negative scroll offset, so a
+	   bounce that gets through can't move anything either. */
+	:global(html) {
+		overscroll-behavior-y: contain;
+	}
 	:global(body) {
+		overscroll-behavior-y: contain;
 		margin: 0;
 		background: var(--paper);
 		color: var(--ink);

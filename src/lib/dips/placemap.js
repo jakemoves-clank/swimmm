@@ -66,7 +66,15 @@ export function cityBounds(outline) {
  * are what the city actually fills, which is usually less than the box in one
  * axis; the caller centres it with the returned offsets baked in.
  */
-export function makeProjection(bounds, boxW, boxH) {
+// Every point of the outline, for callers that want the frame fitted to the
+// city's real shape rather than to the box that contains it.
+export function outlinePoints(outline) {
+	const out = [];
+	for (const poly of outline.coordinates) for (const ring of poly) out.push(...ring);
+	return out;
+}
+
+export function makeProjection(bounds, boxW, boxH, fit) {
 	// Work in a flat space where one unit is one degree of latitude, so the
 	// city keeps its proportions whatever the box is shaped like.
 	const flatX = (lng) => (lng - bounds.west) * LNG_SQUEEZE;
@@ -78,16 +86,20 @@ export function makeProjection(bounds, boxW, boxH) {
 	const gridU = (u, v) => u * GRID_COS - v * GRID_SIN;
 	const gridV = (u, v) => u * GRID_SIN + v * GRID_COS;
 
-	// The box has to hold the *turned* city, so it is fitted to the rotated
-	// corners of the bounds rather than to the lat/lng box itself. A rotated
-	// rectangle's bounding box is the bounding box of its corners, so nothing
-	// inside the bounds can fall outside the fit.
-	const corners = [
-		[bounds.west, bounds.south],
-		[bounds.west, bounds.north],
-		[bounds.east, bounds.south],
-		[bounds.east, bounds.north]
-	].map(([lng, lat]) => [gridU(flatX(lng), flatY(lat)), gridV(flatX(lng), flatY(lat))]);
+	// The box has to hold the *turned* city. Fitting the rotated corners of the
+	// lat/lng box is safe but loose: Toronto is itself roughly a rotated
+	// rectangle, so once turned it sits well inside that envelope and the map
+	// draws small with fat margins. Given the real outline, fit the rotated
+	// extent of its own points instead — same transform, same inverse, just a
+	// frame that stops at the city rather than at the box around it.
+	const corners = (
+		fit ?? [
+			[bounds.west, bounds.south],
+			[bounds.west, bounds.north],
+			[bounds.east, bounds.south],
+			[bounds.east, bounds.north]
+		]
+	).map(([lng, lat]) => [gridU(flatX(lng), flatY(lat)), gridV(flatX(lng), flatY(lat))]);
 	const minU = Math.min(...corners.map((c) => c[0]));
 	const maxU = Math.max(...corners.map((c) => c[0]));
 	const minV = Math.min(...corners.map((c) => c[1]));

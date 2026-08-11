@@ -44,9 +44,11 @@
 	// The variant ("Long Course (50m)") is the first thing to go: it qualifies
 	// the swim rather than describing the appointment.
 	const VARIANT_PX = 88;
-	// A trip rule shorter than this has nowhere to put an icon without the
-	// icon becoming the rule. The words in the block still say the mode.
-	const ICON_MIN_PX = 18;
+	// Below this the rule is shorter than the icon that would sit on it. Most
+	// trips are short — a ten-minute walk is ten pixels at a tight scale — so
+	// the threshold is the icon's own height and no more; the words in the
+	// block still say the mode when it goes.
+	const ICON_MIN_PX = 11;
 	// What sits below the planner: the footer line, the page's bottom padding,
 	// and any note about pools the city never placed. Erring generous costs a
 	// few pixels of scale; erring mean costs a scrollbar.
@@ -67,7 +69,10 @@
 		if (!el) return;
 		// Document-relative, so a reader who has scrolled doesn't get a
 		// different scale from one who hasn't.
-		const top = el.getBoundingClientRect().top + window.scrollY;
+		// Clamped: iOS rubber-banding drives scrollY negative, which would
+		// otherwise read as "the planner starts higher up the page" and
+		// rescale the day for the length of the bounce.
+		const top = el.getBoundingClientRect().top + Math.max(0, window.scrollY);
 		avail = Math.max(0, viewportHeight - top - BELOW_PX);
 	}
 
@@ -206,12 +211,14 @@
 					     this band; a hairline and a tick say the same thing with a
 					     twentieth of the ink. -->
 					{#if dip.routed && dip.leaveBy < dip.start_min}
+						{@const showIcon = tripH >= ICON_MIN_PX}
 						<span
 							class="trip-rule"
+							class:ticked={!showIcon}
 							style="top: {(dip.leaveBy - dip.start_min) * scale}px; height: {tripH}px"
 							aria-hidden="true"
 						>
-							{#if tripH >= ICON_MIN_PX}{@render modeIcon(iconFor(dip))}{/if}
+							{#if showIcon}{@render modeIcon(iconFor(dip))}{/if}
 						</span>
 					{/if}
 
@@ -332,7 +339,7 @@
 		border-left: 1px solid var(--trip-rule);
 		z-index: 0;
 	}
-	.trip-rule::before {
+	.trip-rule.ticked::before {
 		/* The departure itself: a tick you can put a finger on. */
 		content: '';
 		position: absolute;
@@ -344,15 +351,20 @@
 	/* Sat on the rule rather than beside it, with the page showing through
 	   behind it, so the icon reads as a label on the line and not as a second
 	   mark near it. */
+	/* On the departure end, not the middle. Centred on the line it would
+	   otherwise interrupt, it reads as the mark the trip starts from — the
+	   line runs out of the icon and down to the water — instead of as a break
+	   halfway along. It also survives a short trip, which the middle did not:
+	   there is always a top, and most trips are only a few minutes long. */
 	.mode {
 		position: absolute;
-		top: 50%;
+		top: 0;
 		left: 1px;
 		transform: translate(-50%, -50%);
 		display: block;
 		color: var(--gray-500);
 		background: var(--paper);
-		padding: 1px 0;
+		border-radius: 50%;
 	}
 	/* No border, no radius, no shadow: a pale ground is all it takes to read
 	   as a block against the rules, and the rest was decoration.
