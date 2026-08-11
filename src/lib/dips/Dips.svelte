@@ -405,16 +405,7 @@
 	:global(body) {
 		height: 100%;
 	}
-	/* Mobile Safari's pull-to-refresh rubber-bands the page, and the planner
-	   sizes itself from the viewport — so the gesture was rescaling the whole
-	   day mid-pull. Containing the overscroll keeps the gesture from starting;
-	   the measurement is also clamped against a negative scroll offset, so a
-	   bounce that gets through can't move anything either. */
-	:global(html) {
-		overscroll-behavior-y: contain;
-	}
 	:global(body) {
-		overscroll-behavior-y: contain;
 		margin: 0;
 		background: var(--paper);
 		color: var(--ink);

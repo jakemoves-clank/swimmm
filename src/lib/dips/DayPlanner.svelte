@@ -55,7 +55,6 @@
 	const BELOW_PX = 44;
 
 	let el = $state(null);
-	let viewportH = $state(0);
 	let avail = $state(0);
 
 	// The planner used to measure its own box and scroll inside it, which put a
@@ -65,22 +64,40 @@
 	// everything above it. That measurement has to come from something other
 	// than the planner's own height, or setting the height would change the
 	// measurement that set it.
-	function measure(viewportHeight, _offer) {
+	// Both readings are deliberately *layout* quantities, not visual ones,
+	// because pull-to-refresh moves every visual one. Rubber-banding slides
+	// the page under the viewport — so getBoundingClientRect().top grows,
+	// scrollY goes negative, and innerHeight jumps as iOS collapses its
+	// toolbars. Sizing the day from any of those rescaled the whole planner
+	// for the length of the pull. These two don't move for a gesture that
+	// changes no layout:
+	//
+	//   offsetTop            the element's position in the document
+	//   clientHeight         the layout viewport — the same height `100vh`
+	//                        resolves to, which iOS holds still across a
+	//                        toolbar collapse
+	//
+	// The cost is that the fit is to the *large* viewport, so a little of the
+	// last dip can sit under a shown toolbar; BELOW_PX absorbs most of it, and
+	// a page that scrolls is the honest answer to the rest.
+	function measure(_offer) {
 		if (!el) return;
-		// Document-relative, so a reader who has scrolled doesn't get a
-		// different scale from one who hasn't.
-		// Clamped: iOS rubber-banding drives scrollY negative, which would
-		// otherwise read as "the planner starts higher up the page" and
-		// rescale the day for the length of the bounce.
-		const top = el.getBoundingClientRect().top + Math.max(0, window.scrollY);
-		avail = Math.max(0, viewportHeight - top - BELOW_PX);
+		let top = 0;
+		for (let node = el; node; node = node.offsetParent) top += node.offsetTop;
+		avail = Math.max(0, document.documentElement.clientHeight - top - BELOW_PX);
 	}
 
-	// Both reasons to measure again — the window resized, or the offer changed
-	// and with it the notes the planner sits under — are passed in as
-	// arguments rather than read inside, so neither dependency can be tidied
-	// away by someone who can't see why a value is mentioned and unused.
-	$effect(() => measure(viewportH, dips));
+	// The offer is passed in rather than read inside so the dependency can't be
+	// tidied away by someone who can't see why a value is mentioned and unused:
+	// when it changes, so do the notes the planner sits under. A real viewport
+	// change comes through `resize` — which fires for an iOS toolbar collapse
+	// too, but re-reading clientHeight then simply gives the same number.
+	$effect(() => {
+		measure(dips);
+		const onResize = () => measure(dips);
+		window.addEventListener('resize', onResize);
+		return () => window.removeEventListener('resize', onResize);
+	});
 
 	const span = $derived(planSpan(dips, nowMin));
 	const minutes = $derived(Math.max(1, span[1] - span[0]));
@@ -171,8 +188,6 @@
 		{/if}
 	</svg>
 {/snippet}
-
-<svelte:window bind:innerHeight={viewportH} />
 
 <div class="planner" bind:this={el}>
 	<div class="canvas" style="height: {height}px">
