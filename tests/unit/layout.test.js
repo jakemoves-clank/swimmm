@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { layoutDips, planSpan } from '../../src/lib/v3/layout.js';
+import { layoutDips, planSpan } from '../../src/lib/dips/layout.js';
 
 let seq = 0;
 const dip = (start, end, over = {}) => ({

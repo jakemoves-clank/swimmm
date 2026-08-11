@@ -1,7 +1,11 @@
 # Swimmm
 
-One-screen mobile site answering: **which City of Toronto pools have adult lane
-swim today, and which are closest to me and soonest?**
+One-screen mobile site answering: **when could I go for a swim?**
+
+Not a directory of pools — a handful of *dips*: concrete appointments with a
+departure time, a way of getting there, and a booked window in the water. The
+archived `/v1` answers the older question ("which pools have a swim today, and
+which are closest and soonest?") and shows the difference.
 
 Proof of concept. SvelteKit (Svelte 5), fully static — city data is fetched at
 build time and baked into the prerendered page (~30 KB gzipped). No accounts,
@@ -11,7 +15,7 @@ no map, no runtime backend; grayscale UI with one accent color.
 
 | Route | What |
 | --- | --- |
-| `/` | the live site — where development happens |
+| `/` | the live site — the concierge, offering dips ([below](#dips)) |
 | `/v1` | archived snapshot: the main page as it stood |
 | `/v2` | archived snapshot: the design studies gallery (previously `/concepts`) |
 | `/concepts` | signpost to `/v2`, carrying the query string with it |
@@ -107,31 +111,124 @@ city leaves open to adults has no `Age Max`; the ones that set it are
 age-bracketed programs ("Leisure Swim: Preschool" at 5, "Leisure Swim: Youth"
 at 13–23) that an adult can't drop into.
 
-## Travel times (optional)
+## Dips
 
-With a Mapbox public token set (`PUBLIC_MAPBOX_TOKEN`), the page fetches
-walking and cycling times from the [Mapbox Matrix API](https://docs.mapbox.com/api/navigation/matrix/)
-and only shows swims you can actually get to: within
-`DEFAULT_MAX_TRAVEL_MIN` (60) minutes by the faster mode, arriving with at
-least `DEFAULT_MIN_SWIM_MIN` (30) minutes left to swim. Both knobs live in
-`src/lib/config.js` — the single place a future settings UI should read and
-write — and can be overridden per-visit with `?max=45&swim=20`.
+A **dip** is what the live site offers: a location, a way of getting there, a
+one-way travel time, and a booked window in the water.
 
-The browser calls Mapbox directly, so the user's location is shared with
-Mapbox (necessary to compute travel times) — there is no Swimmm server for it
-to reach. Without a token, or if Mapbox is unreachable, the page falls back
-to straight-line distances and hides nothing.
+```
+leave 1:40 · walk 20 min · in the water 2:00–2:45 at Regent Park
+```
 
-A **top pick** is surfaced above the list via the tier cascade in
-`config.js` `TOP_RESULT`: a swim starting within 2 hours that's ≤ 15 min on
-foot, else ≤ 20 min by bike, else ≤ 30 min by transit with at most one
-connection. Transit times come from [Transitous](https://transitous.org)
-(`TRANSIT_PROVIDER` in `config.js`) — a free, community-run MOTIS routing
-API over transit agencies' official GTFS feeds (the TTC's, for Toronto).
-It's only queried when walking and biking both fail, capped at the
-`LOOKUP_LIMIT` (8) nearest pools, and called from the browser so location
-stays between the browser and the routing providers. When every tier comes
-up empty, the page shows a desert.
+It is deliberately narrower than the drop-in session it comes from. A session
+running 1–4 p.m. yields one 45-minute dip, not three hours of open water,
+because a three-hour block is a listing again and the reader is back to doing
+the arithmetic themselves. How long a dip is, is a user setting
+(`DIP_DURATION_OPTIONS` = 30/45/60, default 45, `?dip=30` per visit): a dip
+takes the length you asked for whenever the session has room for it, and
+shortens a step at a time when it doesn't — which costs it appeal and is said
+out loud on the card, never hidden.
+
+**Appeal** — which dips are worth offering — lives alone in
+`src/lib/appeal.js`, with every number it uses in `config.js` `APPEAL`, so
+retuning the concierge's taste never means editing the code that applies it.
+A dip qualifies when its mode gets you there inside that mode's threshold:
+
+| Mode | Within | Notes |
+| --- | --- | --- |
+| walk | 15 min | preferred over everything |
+| bike | 20 min | |
+| transit | 20 min | at most one connection |
+| drive | 20 min | last resort |
+
+Mode is the dominant term and the order is a guarantee, not a tendency: the
+`BASE` scores are spaced 40 apart against a maximum swing of 33 from the other
+terms (proximity within the mode's range, and the shortfall penalty), so the
+sweetest drive in Toronto still loses to the worst qualifying transit trip.
+Tests pin that at both extremes. Adding a consideration — weather, water
+temperature, a facility rating — means adding one entry to `TERMS`, which
+joins the score and the printed breakdown without touching anything else.
+
+**Reach** is a field on the dip, not an assumption behind it, because a trip
+can't always be routed:
+
+```
+{ routed: true,  mode, minutes }   a trip Mapbox or Transitous measured
+{ routed: false, km }              a straight line, and we say so
+```
+
+A travel *time* is never estimated. The concepts at `/v2` guess one at
+4.8 km/h because a gallery has to draw something; a departure time is a
+promise, and an estimated "leave at 1:40" is how you miss a swim. So when
+routing is unavailable — no token, Mapbox down, or one pool it can find no
+road to — the dip keeps its window in the water, drops its departure time,
+and shows the straight-line distance instead, with a dashed edge and a
+banner. The reader can judge how long 2.3 km takes them; we won't pretend to.
+`APPEAL.DISTANCE.BASE` is 0 against the routed modes' 40–160, so every
+distance-only dip ranks below every routed one — prefer what we can vouch for.
+
+`DIP_SELECTION` turns the ranked list into the handful actually shown: five,
+spread so no two overlap in the water by more than 10 minutes and no pool
+appears more than twice — so a reader with a free afternoon can ask "I'm free
+between 2 and 4, what are my options?" rather than being told about 2 p.m.
+five times. When the day genuinely offers nothing else the spread rule gives
+way and overlapping dips are shown anyway, drawn side by side.
+
+**Which day** — `planDay` shows today whenever today still has a reachable
+swim ahead of the clock, and otherwise the next day that does, up to a week
+out. One rule covers three cases: tonight's swims are over (so it offers
+tomorrow); nothing has opened yet, so the whole day is still ahead of you (so
+it offers today); the city has shut for a holiday (so it skips the day
+entirely). A day whose swims are all out of reach counts as shut, because
+from the reader's side it is.
+
+### The day planner
+
+The offer is drawn as a single column with a real time axis, after `/v2`'s
+Concept 02 — but turned through ninety degrees in what it is about. The
+concept put one column per pool and asked you to compare fourteen; this has
+one column, your afternoon, with the dips arranged down it at a fixed two
+pixels per minute, so distance down the page *is* time. Each dip carries the
+hatched run of its trip immediately above it: the thing a wall calendar can
+never tell you, and the reason a dip is an appointment rather than an opening
+time. The layout arithmetic (`src/lib/dips/layout.js`) is separate from the
+component and unit-tested, including the calendar-style packing for the
+uncommon overlapping case.
+
+### Where are you?
+
+There is no default origin. Decline the location prompt — or open the page in
+a frame, where it still refuses to raise a prompt a hostile parent could dress
+up — and it asks: a silhouette of Toronto with the city's pools marked, which
+you tap to place yourself. A precisely routed trip from a place you are not
+standing is a worse lie than an approximate one from where you are. The pools
+earn their place as landmarks; a bare outline is hard to find yourself on.
+Arrow keys move the marker about a kilometre a press (five with shift) and
+Enter confirms, so it is not a tap-only control. No tiles and no third-party
+map: the projection is forty lines in `src/lib/dips/placemap.js`.
+
+## Travel times
+
+A Mapbox public token (`PUBLIC_MAPBOX_TOKEN`) buys walking, cycling and
+driving times from the [Mapbox Matrix API](https://docs.mapbox.com/api/navigation/matrix/);
+transit comes from [Transitous](https://transitous.org)
+(`TRANSIT_PROVIDER` in `config.js`) — a free, community-run MOTIS routing API
+over transit agencies' official GTFS feeds (the TTC's, for Toronto).
+
+Both are called from the browser, so the user's location goes to the routing
+providers and nowhere else — there is no Swimmm server for it to reach.
+Transitous costs one request per pool, so it is only asked when Mapbox's modes
+haven't already filled the handful, and only about the pools they couldn't
+reach; the `LOOKUP_LIMIT` (8) nearest are queried at most. Which modes are
+fetched follows `APPEAL.MODES`, so teaching the concierge a new one is a
+config edit. Without a token the site still works — see **Reach** above.
+
+The archived `/v1` predates all this and is sealed with its own copy: it
+fetches walking and cycling only, hides swims beyond `DEFAULT_MAX_TRAVEL_MIN`
+(60) minutes or leaving less than `DEFAULT_MIN_SWIM_MIN` (30) in the water
+(`?max=45&swim=20`), surfaces a **top pick** via the tier cascade in
+`TOP_RESULT` (≤ 15 min walk, else ≤ 20 min bike, else ≤ 30 min transit with at
+most one connection), and shows a desert when no tier yields anything.
 
 ## Design studies — `/v2`
 
@@ -195,8 +292,10 @@ build, since the municipal boundary changes about never.
 The browser asks for your location and uses it **only in the page**, snapped
 to a ~50 m grid before any routing provider sees it. There is no Swimmm
 server to send it to — the site is static files. There is no other user data.
-`/v2` follows the same rule, and falls back to measuring from Nathan
-Phillips Square when you decline.
+`/v2` follows the same rule, and falls back to measuring from Nathan Phillips
+Square when you decline. The live site has no such fallback — it asks you to
+place yourself instead ([above](#where-are-you)), because measuring precisely
+from somewhere you aren't is the more misleading of the two.
 
 ## Develop
 
@@ -210,11 +309,9 @@ npm run build && npm run preview   # the real static build
 
 Environment variables (build-time):
 
-- `PUBLIC_MAPBOX_TOKEN` — Mapbox public (pk.) token. **Required for the root
-  page**: v3 offers dips, a dip states a departure time, and it won't state
-  one it hasn't routed — so a build without a token yields a `/` that can only
-  apologise and link the city's schedules. `/v1` and `/v2` still degrade
-  gracefully without it (straight-line distances, labelled as estimates)
+- `PUBLIC_MAPBOX_TOKEN` — Mapbox public (pk.) token enabling routed travel
+  times; omit to build without it. The live site then offers dips measured as
+  straight-line distances and says so, rather than inventing a departure time
 - `SWIMMM_DATA_FILE` — load the schedule from a local JSON file instead of
   the city (used by e2e tests)
 - `BASE_PATH` — subpath the site is served under (the deploy workflow sets

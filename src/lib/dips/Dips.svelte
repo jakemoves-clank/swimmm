@@ -1,13 +1,10 @@
 <script>
-	// v3 — the concierge.
+	// The concierge — the live site.
 	//
-	// v1 answered "which pools have a swim today?" with a directory. v3
-	// answers "when could I go for a swim today?" with a handful of
-	// appointments. The difference is entirely in src/lib/dip.js and
-	// src/lib/appeal.js; this file is presentation and plumbing.
-	//
-	// Rendered by both `/` and `/v3`, from one component, so the alias can
-	// never drift from the root. (`/v1` is the opposite: a frozen copy.)
+	// The version sealed at /v1 answered "which pools have a swim today?"
+	// with a directory. This answers "when could I go for a swim?" with a
+	// handful of appointments. The difference is entirely in src/lib/dip.js
+	// and src/lib/appeal.js; this file is presentation and plumbing.
 	import { onMount } from 'svelte';
 	import { base } from '$app/paths';
 	import { torontoNow } from '$lib/time.js';

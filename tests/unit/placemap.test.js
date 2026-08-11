@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { cityBounds, makeProjection, outlinePath } from '../../src/lib/v3/placemap.js';
+import { cityBounds, makeProjection, outlinePath } from '../../src/lib/dips/placemap.js';
 import { TORONTO_OUTLINE } from '../../src/lib/geo/torontoOutline.js';
 
 describe('cityBounds', () => {

@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { anchorInstant, pinClock, readAnchor } from './fixture-time.js';
+import { anchorInstant, pinClock, readAnchor } from '../fixture-time.js';
 
 // v3's user story: a person opens Swimmm and is offered a few dips they
 // could actually take today — each one an appointment (leave at, in the
@@ -81,15 +81,6 @@ test('the lane/leisure toggle changes what you are offered, and rides in the URL
 	// Leisure at Nearby Pool runs 1–2:30 p.m., so the dip starts an hour earlier.
 	await expect(page.locator('.dip').first()).toContainText('1:00 p.m.–1:45 p.m.');
 	await expect(page).toHaveURL(/kind=leisure/);
-});
-
-test('/v3 is the same page as the root, not a copy that can drift', async ({ page }) => {
-	await page.goto('/v3');
-
-	const dip = page.locator('.dip').first();
-	await expect(dip).toContainText('Nearby Pool');
-	await expect(dip).toContainText('2:00 p.m.–2:45 p.m.');
-	await expect(dip).toContainText('leave 1:50 p.m.');
 });
 
 test('degrades to distances, saying so, when it cannot route a trip', async ({ page }) => {

@@ -146,14 +146,15 @@ jobs:
           npm run build
           cp .city-cache/stamp.txt build/stamp.txt
 
-      # Without a token the site still builds and lists every swim — it just
-      # can't show walk/bike/transit times or a top pick. That is a legitimate
+      # Without a token the site still builds and still offers dips — it just
+      # measures them as straight-line distances and says so, rather than
+      # routing a trip and naming a departure time. That is a legitimate
       # deploy, so warn rather than fail; the point is that it stops being
       # invisible. Only ever reports whether a token arrived, never its value.
       - name: Report whether travel times are enabled
         run: |
           if grep -q 'mapboxToken:null' root-src/build/index.html; then
-            echo "::warning::No PUBLIC_MAPBOX_TOKEN reached the build — deploying without walk/bike/transit times. Set it under Settings → Secrets and variables → Actions → Variables as a repository variable (an environment-scoped one will not reach this job)."
+            echo "::warning::No PUBLIC_MAPBOX_TOKEN reached the build — deploying with straight-line distances instead of routed travel times. Set it under Settings → Secrets and variables → Actions → Variables as a repository variable (an environment-scoped one will not reach this job)."
             echo 'Travel times: **off** — no `PUBLIC_MAPBOX_TOKEN` reached the build.' >> "$GITHUB_STEP_SUMMARY"
           else
             echo 'Travel times: **on**.' >> "$GITHUB_STEP_SUMMARY"
