@@ -8,19 +8,30 @@ function ageOrNull(v) {
 	return Number.isFinite(n) ? n : null;
 }
 
-// A session an adult of any age can simply turn up to. Every genuinely
-// adult-open swim the city publishes leaves Age Max unset; the ones that cap
-// it are age-bracketed programs — "Leisure Swim: Preschool" (max 5),
-// "Leisure Swim: Youth" (13–23) — that an adult can't drop into. Family swims
-// are excluded by name for the same reason: they're a different session type,
-// not an adult one.
+const MIN_GENERAL_ADULT_AGE = 18;
+
+// A session an adult of any age can simply turn up to. That needs both
+// bounds, and for a while this only checked one.
 //
-// Checked against the live feed: for lane swim this selects exactly the same
-// rows as the narrower "Age Max < 18" test it replaces, so widening the rule
-// to cover leisure left lane results untouched.
+// No Age Max means nobody is too old: the rows that set it are age-bracketed
+// programmes ("Leisure Swim: Preschool" at 5, "Leisure Swim: Youth" 13–23) an
+// adult can't drop into. But an absent cap says nothing about the *floor*,
+// and "Lane Swim: Older Adult" sets Age Min 60 with no Max — so it sailed
+// through, and the site offered a 60+ swim to everyone. A door you'd be
+// turned away at is a worse promise than no offer at all.
+//
+// Measured against the live feed: of the swim rows with no Age Max, Age Min
+// is only ever 0, 7, 13, 17, 18 or 60. The gap between 18 and 60 is why this
+// threshold is safe — it drops exactly the 401 "Older Adult" rows and nothing
+// else. If the city ever publishes a 19+ adult swim, this rule would wrongly
+// drop that too, and would want revisiting rather than nudging.
+//
+// Family swims are excluded by name: a different session type, not an adult one.
 function isAdultSession(row, title) {
 	if (/family/i.test(title)) return false;
-	return ageOrNull(row['Age Max']) === null;
+	const ageMax = ageOrNull(row['Age Max']);
+	const ageMin = ageOrNull(row['Age Min']);
+	return ageMax === null && (ageMin === null || ageMin <= MIN_GENERAL_ADULT_AGE);
 }
 
 // Which kind of swim a drop-in row is, or null if it isn't one we list.

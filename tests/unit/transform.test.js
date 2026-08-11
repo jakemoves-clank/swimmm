@@ -28,8 +28,8 @@ describe('swimKind', () => {
 		expect(swimKind(row())).toBe('lane');
 	});
 
-	it('classifies Lane Swim: Older Adult as lane (adults can attend)', () => {
-		expect(swimKind(row({ 'Course Title': 'Lane Swim: Older Adult', 'Age Min': '60' }))).toBe('lane');
+	it('rejects Lane Swim: Older Adult (Age Min 60 excludes general adults)', () => {
+		expect(swimKind(row({ 'Course Title': 'Lane Swim: Older Adult', 'Age Min': '60', 'Age Max': 'None' }))).toBeNull();
 	});
 
 	it('classifies course-length variants like Lane Swim: Long Course (50m)', () => {
@@ -70,6 +70,20 @@ describe('swimKind', () => {
 			swimKind(row({ 'Course Title': 'Leisure Swim: Youth', 'Age Min': '13', 'Age Max': '23' }))
 		).toBeNull();
 		expect(swimKind(row({ 'Age Max': '17' }))).toBeNull();
+	});
+
+	it('rejects sessions with Age Min above general adulthood', () => {
+		// Older Adult sessions (60+) can't accommodate adults generally.
+		expect(
+			swimKind(row({ 'Course Title': 'Leisure Swim: Older Adult', 'Age Min': '60', 'Age Max': 'None' }))
+		).toBeNull();
+		expect(swimKind(row({ 'Course Title': 'Lane Swim: Older Adult', 'Age Min': '55' }))).toBeNull();
+	});
+
+	it('accepts ordinary swims with low Age Min despite no upper cap', () => {
+		// Sessions open to age 7 or 16 are open to general adults (18+).
+		expect(swimKind(row({ 'Course Title': 'Lane Swim', 'Age Min': '7', 'Age Max': 'None' }))).toBe('lane');
+		expect(swimKind(row({ 'Course Title': 'Leisure Swim', 'Age Min': '16', 'Age Max': 'None' }))).toBe('leisure');
 	});
 });
 
