@@ -35,7 +35,10 @@ const WATER = '9ab8df98-9cff-4a12-97df-70f7a7cf94bf'; // topographic-mapping-wat
 const CENTRELINE = 'ad296ebf-fca6-4e67-b3ce-48040a20e6cd'; // toronto-centreline-tcl
 
 const COORD_DECIMALS = 3; // ~110 m — the map is 320 px across a 45 km city
-const RETAIN = { water: 0.004, streets: 0.08, subway: 0.35 };
+// The lake is one ring of 71,000 surveyed points and is drawn as a flat wash,
+// so it can be cut harder than anything else here without losing a thing a
+// reader would name.
+const RETAIN = { lake: 0.005, water: 0.005, streets: 0.08, subway: 0.35 };
 // How many named through-routes to keep, longest first. A uniform mesh of
 // every arterial is a grey haze — indistinguishable lines carrying no
 // information. Two dozen long streets give the grid its structure, and the
@@ -157,16 +160,81 @@ function linesFrom(topo, minPoints) {
 }
 
 // ── water ────────────────────────────────────────────────────────────────
-// Waterbodies and rivers, minus the ponds: below a hectare or so a feature is
-// a dot at this scale, and a hundred dots read as noise. The lake itself is
-// mostly outside the city polygon, so what survives is the shoreline and the
-// Humber, Don and Rouge valleys — which is exactly the orienting set.
+// Rivers and waterbodies, minus the ponds: below a hectare or so a feature is
+// a dot at this scale, and a hundred dots read as noise. What survives is the
+// Humber, Don and Rouge valleys — the orienting set. The lake is pulled out of
+// this layer and handled below, because it is an area and they are lines.
 console.log('fetching water…');
 // Below roughly a hectare a feature is a dot at this scale, and a hundred
 // dots read as noise, so the small ponds are dropped by bounding-box extent.
-const MIN_WATER_EXTENT = 8e-5; // square degrees ≈ 80 ha — the valleys and the lake, nothing smaller
-const water = (await queryGeometries(WATER)).filter((g) => bboxArea(g) > MIN_WATER_EXTENT);
+const MIN_WATER_EXTENT = 8e-5; // square degrees ≈ 80 ha — the valleys, nothing smaller
+const waterRecords = await queryRecords(WATER, null, ['WATERBODY_NAME']);
+const water = waterRecords
+	.filter((r) => r.WATERBODY_NAME !== 'Lake Ontario')
+	.map((r) => r.geometry)
+	.filter((g) => bboxArea(g) > MIN_WATER_EXTENT);
 console.log(`  ${water.length} features`);
+
+// ── the lake ─────────────────────────────────────────────────────────────
+// Toronto's southern edge is not an edge, it is a coast, and a map that stops
+// drawing at the city line says the opposite: the reader sees a boundary and
+// has no way to know which side of it is water. So the lake is drawn as a
+// filled area under the city — the one piece of geography on this map that
+// everyone can already find.
+//
+// What the city publishes under "Lake Ontario" is not the lake, though: it is
+// Toronto's *water lot*. The polygon follows the real shore and then closes
+// itself with three jurisdictional runs in open water — south down 79°W (the
+// Durham line), west along 43.5°N, and back up the Mississauga border. Two of
+// those cut across the frame this map draws, and a straight line through open
+// water reads as a shore that isn't there.
+//
+// So keep the surveyed shoreline and throw the water lot away. Everything on
+// the shore satisfies both tests below (its southernmost point is the mouth of
+// Etobicoke Creek at 43.5830, its easternmost the Pickering shore at 79.005°W)
+// and every point of the three straight runs fails one of them, so the survivor
+// is a single unbroken coast from Etobicoke to Pickering.
+const SHORE_SOUTH = 43.583; // south of this is water lot, not coast
+const SHORE_EAST = -79.005; // east of this is the Durham line
+const lakeRing = (() => {
+	const published = waterRecords.find((r) => r.WATERBODY_NAME === 'Lake Ontario');
+	// The outer ring only. Its holes are the Toronto Islands and the spit's
+	// lagoons, which the city outline already draws — as land, on top of this.
+	// Two shapes for one piece of ground is how they end up disagreeing.
+	const ring = published.geometry.coordinates[0];
+	const shore = ring.filter(([lng, lat]) => lat >= SHORE_SOUTH && lng <= SHORE_EAST);
+
+	// Then close it off the map rather than on it. The lake does not end where
+	// Toronto's jurisdiction does, and neither does the coast: at both ends the
+	// shore is continued along its own last bearing until it is past any frame
+	// this map could draw, and the ring is closed far out in the water. An
+	// extrapolated coast is a guess, but it is a guess about the two corners of
+	// Mississauga and Ajax that the frame clips anyway — and it is the only way
+	// the water reaches the corners of a rotated map without a hard edge.
+	const RUN_DEG = 0.5; // ~55 km — past the frame at any plausible box shape
+	const FAR_SOUTH = 43.3; // below the frame's deepest corner (~43.48)
+	// The bearing is taken over the last 5 km of coast, not the last few
+	// vertices: this survey carries a point every couple of metres, so a short
+	// chord measures one bay wall rather than the way the shore is heading.
+	const CHORD_DEG = 0.045;
+	const flatDist = (a, b) => Math.hypot((a[0] - b[0]) * LNG_SQUEEZE, a[1] - b[1]);
+	const outward = (end, step) => {
+		const from = shore[end];
+		let toward = from;
+		for (let i = end; i >= 0 && i < shore.length; i += step) {
+			toward = shore[i];
+			if (flatDist(from, toward) >= CHORD_DEG) break;
+		}
+		const dx = (from[0] - toward[0]) * LNG_SQUEEZE;
+		const dy = from[1] - toward[1];
+		const len = Math.hypot(dx, dy) || 1;
+		return [from[0] + ((dx / len) * RUN_DEG) / LNG_SQUEEZE, from[1] + (dy / len) * RUN_DEG];
+	};
+	const west = outward(0, 1);
+	const east = outward(shore.length - 1, -1);
+	return [west, ...shore, east, [east[0], FAR_SOUTH], [west[0], FAR_SOUTH]];
+})();
+console.log(`  lake: ${lakeRing.length} shoreline points before simplifying`);
 
 function bboxArea(geom) {
 	let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
@@ -196,6 +264,58 @@ const arterials = chainByName(streetRecords.filter((r) => r.FEATURE_CODE_DESC !=
 	.slice(0, STREET_COUNT);
 const streets = [...expressways, ...arterials].map((s) => ({ type: 'LineString', coordinates: s.line }));
 console.log(`  ${streetRecords.length} segments → ${streets.length} through-routes`);
+console.log(`  grid bearing ${gridBearing(streetRecords).toFixed(2)}° east of north`);
+
+// Where GRID_NORTH_DEG in src/lib/dips/placemap.js comes from, printed here so
+// the map's rotation can be checked against the city's own street data rather
+// than taken on faith.
+//
+// Segment bearings, length-weighted, folded into a 90° period because a grid
+// has no head or tail: a north-south street and an east-west one are the same
+// grid. Averaged as a circular mean of 4θ (the standard trick for axial data —
+// arithmetic means are meaningless on a wrapped quantity), then re-estimated
+// within ±15° of the running estimate so the diagonals, the ravine roads and
+// the expressway curves can't drag it.
+//
+// These records — expressway and major arterial — give 74.49°. Widening the
+// same query to every centreline class (16,939 records, including the minor
+// arterials and collectors that make up the residential grid) gives 73.86°,
+// which is the number placemap.js uses: grid north is its perpendicular,
+// 16.1° west of true north. Downtown alone is 17.3° (Bloor), the arterials
+// north of Eglinton 15.5° — one grid to a rounding, three to a surveyor.
+function gridBearing(records) {
+	const segs = [];
+	for (const r of records) {
+		const lines =
+			r.geometry.type === 'LineString' ? [r.geometry.coordinates] : r.geometry.coordinates;
+		for (const line of lines) {
+			for (let i = 1; i < line.length; i++) {
+				const dx = (line[i][0] - line[i - 1][0]) * LNG_SQUEEZE;
+				const dy = line[i][1] - line[i - 1][1];
+				const len = Math.hypot(dx, dy);
+				if (!len) continue;
+				const th = (Math.atan2(dx, dy) * 180) / Math.PI;
+				segs.push([((th % 90) + 90) % 90, len]);
+			}
+		}
+	}
+	let est = 45; // no prior: start halfway and let the trimming find the grid
+	for (let pass = 0; pass < 12; pass++) {
+		let sx = 0;
+		let sy = 0;
+		for (const [th, len] of segs) {
+			// Nearest representative of θ to the current estimate, since 89° and
+			// 1° are one degree apart on a 90° circle.
+			let d = th - est;
+			d = ((((d + 45) % 90) + 90) % 90) - 45;
+			if (pass > 1 && Math.abs(d) > 15) continue;
+			sx += len * Math.cos((4 * (est + d) * Math.PI) / 180);
+			sy += len * Math.sin((4 * (est + d) * Math.PI) / 180);
+		}
+		est = ((((Math.atan2(sy, sx) * 180) / Math.PI / 4) % 90) + 90) % 90;
+	}
+	return est;
+}
 
 // ── subway ───────────────────────────────────────────────────────────────
 // Published as a shapefile only, so unzip it in memory and read the polylines
@@ -211,7 +331,10 @@ const subway = subwayFc.features.map((f) => f.geometry).filter(Boolean);
 console.log(`  ${subway.length} lines`);
 
 // ── emit ─────────────────────────────────────────────────────────────────
+// The lake first, because it is drawn first: a wash under everything, with the
+// city sitting on it.
 const layers = {
+	lake: linesFrom(simplifyGeometries([{ type: 'Polygon', coordinates: [lakeRing] }], RETAIN.lake), 4),
 	water: linesFrom(simplifyGeometries(water, RETAIN.water), 4),
 	streets: linesFrom(simplifyGeometries(streets, RETAIN.streets), 2),
 	subway: linesFrom(simplifyGeometries(subway, RETAIN.subway), 2)
@@ -228,7 +351,9 @@ writeFileSync(
 // City of Toronto Open Data: topographic-mapping-waterbodies-and-rivers,
 // toronto-centreline-tcl (expressways and major arterials only), and
 // ttc-subway-shapefiles. Simplified to ${total} points
-// (water ${counts.water}, streets ${counts.streets}, subway ${counts.subway}).
+// (lake ${counts.lake}, water ${counts.water}, streets ${counts.streets}, subway ${counts.subway}).
+//
+// \`lake\` is a closed ring meant to be filled; the rest are open polylines.
 //
 // Drawn unlabelled and under the data on the place map: enough geography to
 // find yourself by, not a map to read.

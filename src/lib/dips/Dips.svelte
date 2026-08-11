@@ -30,7 +30,7 @@
 
 	let now = $state(null);
 	let coords = $state(null); // { lat, lng } — lives only in this browser tab
-	let geoDenied = $state(false);
+	let liveStatus = $state('off'); // 'off' | 'idle' | 'asking' | 'denied'
 	let placed = $state(null); // { lat, lng } the reader tapped on the map
 	let framed = $state(false);
 	let selfUrl = $state('');
@@ -46,11 +46,14 @@
 	// where you actually are. Either the browser tells us, or the reader
 	// does, or we have nothing to offer and say so.
 	const origin = $derived(coords ?? placed);
-	// The map asks the question. It also covers the framed case, where we
-	// refuse to raise a location prompt a hostile parent page could dress up
-	// — tapping a map raises no prompt, so it is the one way to answer that
-	// is safe inside a frame.
-	const needsPlace = $derived((geoDenied || framed) && !placed);
+	// The map is the first thing on the page, not the fallback it used to be.
+	// v3 used to fire the browser's location prompt on load and show the map
+	// only to readers who refused: an interruption before the page had said
+	// anything, asked of someone with no way yet to judge whether it was
+	// worth answering — and a prompt refused once is refused for good. Now
+	// nothing is asked until the reader asks for it, and the map answers the
+	// same question without asking anyone anything.
+	const needsPlace = $derived(!origin);
 
 	// Mapbox modes are fetched up front; transit is one request per pool
 	// against a free community service, so it's only ever asked for the pools
@@ -191,6 +194,28 @@
 		travelFailed = false;
 	}
 
+	// The one place a location prompt can come from: a press. Nothing else in
+	// v3 calls getCurrentPosition.
+	function useLiveLocation() {
+		if (liveStatus !== 'idle') return;
+		liveStatus = 'asking';
+		navigator.geolocation.getCurrentPosition(
+			(pos) => {
+				// Snapped to a ~50 m grid before any routing provider sees it.
+				coords = snapToGrid({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+				liveStatus = 'idle';
+				loadTravelTimes();
+			},
+			() => {
+				// Refused, or no fix. Either way the browser will not be asked
+				// twice — a denial sticks to the origin, so a second press
+				// would raise nothing at all — and the map is still there.
+				liveStatus = 'denied';
+			},
+			{ maximumAge: 300_000, timeout: 15_000 }
+		);
+	}
+
 	function selectKind(k) {
 		kind = k;
 		syncUrl();
@@ -212,7 +237,8 @@
 		// GitHub Pages can't send X-Frame-Options, and CSP frame-ancestors is
 		// header-only, so a hostile page could frame this one and dress up the
 		// location prompt. Try to break out; if the browser blocks that, still
-		// refuse to ask for location.
+		// refuse to offer the prompt at all — the map asks the same question
+		// and raises nothing a parent page could take credit for.
 		if (window.self !== window.top) {
 			framed = true;
 			selfUrl = window.self.location.href;
@@ -224,23 +250,8 @@
 			return;
 		}
 
-		if (!navigator.geolocation) {
-			geoDenied = true;
-			return;
-		}
-		navigator.geolocation.getCurrentPosition(
-			(pos) => {
-				// Snapped to a ~50 m grid before any routing provider sees it.
-				coords = snapToGrid({ lat: pos.coords.latitude, lng: pos.coords.longitude });
-				loadTravelTimes();
-			},
-			() => {
-				// No fix, so no origin yet — the map asks, and routing waits
-				// until it has an answer worth measuring from.
-				geoDenied = true;
-			},
-			{ maximumAge: 300_000, timeout: 15_000 }
-		);
+		// The button only appears where pressing it could do something.
+		if (navigator.geolocation) liveStatus = 'idle';
 	});
 
 </script>
@@ -305,7 +316,7 @@
 		     through-routes and subway lines — geography most readers never see,
 		     because most readers let the browser answer. -->
 		{#await import('./PlaceMap.svelte') then { default: PlaceMap }}
-			<PlaceMap onplace={setPlace} />
+			<PlaceMap onplace={setPlace} onlive={useLiveLocation} {liveStatus} />
 		{/await}
 	{:else if !offer}
 		<p class="status">Finding you a dip…</p>

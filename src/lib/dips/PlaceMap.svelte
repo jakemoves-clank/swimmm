@@ -1,11 +1,12 @@
 <script>
-	// "Roughly where are you?"
+	// Where are you? — asked without asking anything.
 	//
 	// Every dip is measured from a point, so without one v3 has nothing to
-	// say. When the browser won't give us a location we ask for one directly
-	// rather than quietly measuring from somewhere you aren't: a precisely
-	// routed trip from a place you are not standing is a worse lie than an
-	// approximate one from where you actually are.
+	// say. This is how it gets one, and it is the first thing the page shows:
+	// no permission prompt fires until a reader presses for it, because a
+	// prompt raised before anyone knows what the site is for is a question
+	// about trust asked of a stranger. The map is the alternative, offered on
+	// equal terms, and it can be answered without telling anyone anything.
 	//
 	// Deliberately not a real map. No tiles, no zoom, no pan — one outline of
 	// one city that fits on the screen, because the question is "which part of
@@ -14,9 +15,14 @@
 	// snapped to a ~50 m grid before any routing provider sees it anyway.
 	import { TORONTO_OUTLINE } from '$lib/geo/torontoOutline.js';
 	import { TORONTO_CONTEXT } from '$lib/geo/torontoContext.js';
-	import { cityBounds, makeProjection, outlinePath, linesPath } from './placemap.js';
+	import { cityBounds, makeProjection, outlinePath, ringsPath, linesPath } from './placemap.js';
 
-	let { onplace } = $props();
+	// liveStatus: 'idle' — the button is there to be pressed; 'asking' — the
+	// browser is deciding; 'denied' — it said no, and saying it again is not
+	// something a page can make happen; 'off' — this browser has no
+	// geolocation, or we are in a frame and won't raise a prompt a hostile
+	// parent could dress up as its own.
+	let { onplace, onlive, liveStatus = 'off' } = $props();
 
 	const BOX = { w: 320, h: 210 };
 	const bounds = cityBounds(TORONTO_OUTLINE);
@@ -31,30 +37,45 @@
 	// those particular dots are there, and they answer "where are the pools",
 	// not "where am I".)
 	const context = {
+		// The lake is an area, not a line: it is what tells you that the bottom
+		// of this shape is a coast rather than the edge of the drawing.
+		lake: ringsPath(TORONTO_CONTEXT.lake, projection),
 		water: linesPath(TORONTO_CONTEXT.water, projection),
 		streets: linesPath(TORONTO_CONTEXT.streets, projection),
 		subway: linesPath(TORONTO_CONTEXT.subway, projection)
 	};
 
-	// Starts in the middle of the city rather than nowhere, so the keyboard
-	// route has something to move and the crosshair explains itself.
-	let mark = $state({ x: BOX.w / 2, y: BOX.h / 2 });
-	let placed = $state(false);
+	// No marker until there is something to mark. One drawn on load would be a
+	// claim about where the reader is, made before they have said anything —
+	// and a wrong one, since it can only sit wherever the box happens to
+	// centre. The keyboard route starts it in the middle at the first arrow
+	// press, which is the moment it stops being a lie.
+	let mark = $state(null);
 
 	// One arrow press moves about a kilometre — fine enough to pick a
 	// neighbourhood, coarse enough to cross the city without wearing out a
-	// thumb. Shift moves five times as far.
+	// thumb. Shift moves five times as far. Measured off the projection rather
+	// than recomputed from the bounds: the map is turned to the street grid,
+	// so a degree of latitude is no longer a vertical distance on screen.
 	const STEP_KM = 1;
-	const stepPx = (STEP_KM / 111) * (projection.height / (bounds.north - bounds.south));
+	const stepPx = (() => {
+		const mid = projection.toXY(bounds.west, bounds.south);
+		const km = projection.toXY(bounds.west, bounds.south + STEP_KM / 111);
+		return Math.hypot(km.x - mid.x, km.y - mid.y);
+	})();
 
 	function place(x, y) {
 		mark = {
 			x: Math.max(0, Math.min(BOX.w, x)),
 			y: Math.max(0, Math.min(BOX.h, y))
 		};
-		placed = true;
 	}
 
+	// A tap is the whole interaction. It used to place a marker and then wait
+	// for a "Show dips from here" press, which asked the reader to confirm a
+	// thing they had just done deliberately with their thumb — a second step
+	// buys certainty only where a mistake is expensive, and this one is
+	// undone by the pin in the header.
 	function fromPointer(event) {
 		const rect = event.currentTarget.getBoundingClientRect();
 		// The SVG scales to its container, so a client pixel is not a viewBox
@@ -63,8 +84,12 @@
 			((event.clientX - rect.left) / rect.width) * BOX.w,
 			((event.clientY - rect.top) / rect.height) * BOX.h
 		);
+		confirm();
 	}
 
+	// The keyboard cannot tap, so it gets the two-step version it needs:
+	// arrows move, Enter commits. Without it this control would be a map only
+	// a pointer can answer, and the page has no other way to say where you are.
 	function onKeydown(event) {
 		const far = event.shiftKey ? 5 : 1;
 		const moves = {
@@ -76,10 +101,12 @@
 		const move = moves[event.key];
 		if (move) {
 			event.preventDefault();
-			place(mark.x + move[0] * stepPx * far, mark.y + move[1] * stepPx * far);
+			const from = mark ?? { x: BOX.w / 2, y: BOX.h / 2 };
+			place(from.x + move[0] * stepPx * far, from.y + move[1] * stepPx * far);
 			return;
 		}
-		if (event.key === 'Enter' || event.key === ' ') {
+		// Enter on nothing is not a location, so it says nothing.
+		if ((event.key === 'Enter' || event.key === ' ') && mark) {
 			event.preventDefault();
 			confirm();
 		}
@@ -91,12 +118,24 @@
 	}
 </script>
 
-<section class="place" aria-labelledby="place-heading">
-	<h2 id="place-heading">Roughly where are you?</h2>
-	<p class="why">
-		Every dip is measured from somewhere, and your browser didn't say. Tap the map — anywhere near
-		enough is fine.
-	</p>
+<section class="place">
+	{#if liveStatus !== 'off'}
+		<button
+			class="live"
+			type="button"
+			onclick={onlive}
+			disabled={liveStatus !== 'idle'}
+			aria-busy={liveStatus === 'asking'}
+		>
+			use live location
+		</button>
+	{/if}
+
+	<!-- The whole instruction, and the whole affordance. A crosshair, a
+	     pulsing target or a pin glyph would each be a second way of saying the
+	     same four words, drawn on top of the geography a reader is trying to
+	     read. -->
+	<p class="hint">or tap the map</p>
 
 	<!-- A real button rather than a tabbable SVG: it is focusable, announced
 	     and keyboard-operable for free, and nothing has to be re-implemented
@@ -107,57 +146,66 @@
 	<button
 		type="button"
 		class="map"
-		aria-label="Map of Toronto showing the lake, rivers, main roads and subway lines. Tap to place yourself, or use the arrow keys to move the marker and Enter to confirm."
+		aria-label="Map of Toronto showing the lake, rivers, main roads and subway lines. Tap where you are, or use the arrow keys to move the marker and Enter to confirm."
 		onpointerdown={fromPointer}
 		onkeydown={onKeydown}
 	>
 		<svg viewBox="0 0 {BOX.w} {BOX.h}" class="canvas" aria-hidden="true">
+			<path class="lake" d={context.lake} />
 			<path class="city" d={path} />
 			<path class="streets" d={context.streets} />
 			<path class="water" d={context.water} />
 			<path class="subway" d={context.subway} />
-			<g class="mark" class:on={placed} transform="translate({mark.x},{mark.y})">
-				<circle class="halo" r="11" />
-				<circle class="dot" r="4" />
-			</g>
+			{#if mark}
+				<g class="mark" transform="translate({mark.x},{mark.y})">
+					<circle class="halo" r="11" />
+					<circle class="dot" r="4" />
+				</g>
+			{/if}
 		</svg>
 	</button>
-
-	<div class="actions">
-		<button class="primary" disabled={!placed} onclick={confirm}>
-			{placed ? 'Show dips from here' : 'Tap the map first'}
-		</button>
-	</div>
-	<p class="fine">
-		Your location stays in this browser; only a point snapped to a ~50 m grid is sent to the routing
-		services that work out travel times.
-	</p>
 </section>
 
 <style>
+	/* Not a card. The panel, the border and the radius drew a box around the
+	   only thing on the screen, which is a frame around a frame — the map and
+	   its two controls sit on the page like everything else. */
 	.place {
-		background: #fff;
-		border: 1px solid #e0e0e0;
-		border-radius: 0.6rem;
-		padding: 0.9rem;
 		margin: 0.75rem 0;
 	}
-	h2 {
-		margin: 0;
-		font-size: 1.05rem;
+	/* The live route is offered first because it is the better answer when it
+	   is available — precise, and one press. It is a button and not a link, so
+	   it is painted in the one colour this site spends on pressable things. */
+	.live {
+		display: block;
+		width: 100%;
+		border: 0;
+		border-radius: 999px;
+		background: var(--interactive);
+		color: var(--paper);
+		font: 600 0.95rem/1 inherit;
+		padding: 0.7rem 1rem;
+		cursor: pointer;
 	}
-	.why {
-		margin: 0.25rem 0 0.6rem;
-		font-size: 0.85rem;
-		color: #555;
+	/* Pressed, and either waiting on the browser or refused by it. A refusal
+	   is sticky per origin — pressing again raises nothing — so the button
+	   stops offering. */
+	.live:disabled {
+		background: var(--dip-bg);
+		color: var(--gray-500);
+		cursor: default;
+	}
+	.hint {
+		margin: 0.5rem 0;
+		font-size: 0.8125rem;
+		color: var(--gray-500);
 	}
 	.map {
 		display: block;
 		width: 100%;
 		padding: 0;
 		border: 0;
-		background: #eef2f6;
-		border-radius: 0.4rem;
+		background: none;
 		touch-action: manipulation;
 		cursor: crosshair;
 	}
@@ -170,11 +218,18 @@
 		outline: 3px solid var(--interactive);
 		outline-offset: 2px;
 	}
-	/* Three tones under the marker, each quieter than the data on top of it.
-	   None is labelled: you are meant to recognise the shape, not read it. */
+	/* Four tones under the marker, each quieter than the data on top of it.
+	   None is labelled: you are meant to recognise the shape, not read it.
+	   Land is the page itself and water is the one tinted field, so the coast
+	   reads as a coast — the city keeps a darker edge than anything else here
+	   so its boundary stays findable where it meets the lake. */
+	.lake {
+		fill: var(--dip-bg);
+		stroke: none;
+	}
 	.city {
-		fill: #f0f2f4;
-		stroke: #dfe3e8;
+		fill: var(--paper);
+		stroke: var(--trip-rule);
 		stroke-width: 0.6;
 	}
 	.streets {
@@ -198,33 +253,7 @@
 	}
 	.mark .dot {
 		fill: var(--interactive);
-		stroke: #fff;
+		stroke: var(--paper);
 		stroke-width: 1.5;
-	}
-	/* Before the first tap the crosshair is a suggestion, not an answer. */
-	.mark:not(.on) {
-		opacity: 0.45;
-	}
-	.actions {
-		margin-top: 0.6rem;
-	}
-	.primary {
-		width: 100%;
-		border: 0;
-		border-radius: 999px;
-		background: var(--interactive);
-		color: #fff;
-		font: 600 0.95rem/1 inherit;
-		padding: 0.7rem 1rem;
-		cursor: pointer;
-	}
-	.primary:disabled {
-		background: #c8d2dd;
-		cursor: default;
-	}
-	.fine {
-		margin: 0.55rem 0 0;
-		font-size: 0.72rem;
-		color: #888;
 	}
 </style>

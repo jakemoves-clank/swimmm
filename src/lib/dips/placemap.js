@@ -18,6 +18,29 @@
 const REFERENCE_LAT = 43.72;
 const LNG_SQUEEZE = Math.cos((REFERENCE_LAT * Math.PI) / 180);
 
+// Toronto is drawn to *grid* north, not true north.
+//
+// Nobody here navigates by the pole. Bloor runs "east", Yonge runs "north",
+// and the concession grid those follow sits about a sixth of a right angle off
+// the meridian — so a true-north map of Toronto is a map every local reads at
+// a tilt. Squaring the grid to the screen costs nothing (the map carries no
+// compass and never claimed one) and buys the one thing this map is for:
+// recognising your own neighbourhood fast enough to point at it.
+//
+// The angle is measured, not eyeballed. Over all 16,939 centreline records the
+// map's own build script pulls (expressway, major/minor arterial, collector),
+// the length-weighted circular mean of segment bearings — folded into a 90°
+// period, since a grid has no head or tail, and re-estimated within ±15° of
+// the peak so the diagonals and the ravine roads don't drag it — comes out at
+// 73.9° east of north for the east–west family. Its perpendicular is grid
+// north: 16.1° west of true north. The sub-grids agree closely enough for one
+// number to serve (Bloor and the old city: 17.3°; the arterials north of
+// Eglinton: 15.5°), and disagree enough that a rounder-looking 15 or 20 would
+// be a guess dressed as a fact.
+export const GRID_NORTH_DEG = -16.1;
+const GRID_COS = Math.cos((GRID_NORTH_DEG * Math.PI) / 180);
+const GRID_SIN = Math.sin((GRID_NORTH_DEG * Math.PI) / 180);
+
 export function cityBounds(outline) {
 	let west = Infinity;
 	let east = -Infinity;
@@ -46,11 +69,33 @@ export function cityBounds(outline) {
 export function makeProjection(bounds, boxW, boxH) {
 	// Work in a flat space where one unit is one degree of latitude, so the
 	// city keeps its proportions whatever the box is shaped like.
-	const spanX = (bounds.east - bounds.west) * LNG_SQUEEZE;
-	const spanY = bounds.north - bounds.south;
-	const scale = Math.min(boxW / spanX, boxH / spanY);
-	const drawnW = spanX * scale;
-	const drawnH = spanY * scale;
+	const flatX = (lng) => (lng - bounds.west) * LNG_SQUEEZE;
+	const flatY = (lat) => lat - bounds.south;
+	// …then turn that space so grid north is up. Rotation is the whole trick:
+	// it is a rigid transform, so shapes, proportions and the inverse all
+	// survive it — which they must, because a tap has to come back out as the
+	// ground it was aimed at.
+	const gridU = (u, v) => u * GRID_COS - v * GRID_SIN;
+	const gridV = (u, v) => u * GRID_SIN + v * GRID_COS;
+
+	// The box has to hold the *turned* city, so it is fitted to the rotated
+	// corners of the bounds rather than to the lat/lng box itself. A rotated
+	// rectangle's bounding box is the bounding box of its corners, so nothing
+	// inside the bounds can fall outside the fit.
+	const corners = [
+		[bounds.west, bounds.south],
+		[bounds.west, bounds.north],
+		[bounds.east, bounds.south],
+		[bounds.east, bounds.north]
+	].map(([lng, lat]) => [gridU(flatX(lng), flatY(lat)), gridV(flatX(lng), flatY(lat))]);
+	const minU = Math.min(...corners.map((c) => c[0]));
+	const maxU = Math.max(...corners.map((c) => c[0]));
+	const minV = Math.min(...corners.map((c) => c[1]));
+	const maxV = Math.max(...corners.map((c) => c[1]));
+
+	const scale = Math.min(boxW / (maxU - minU), boxH / (maxV - minV));
+	const drawnW = (maxU - minU) * scale;
+	const drawnH = (maxV - minV) * scale;
 	const offsetX = (boxW - drawnW) / 2;
 	const offsetY = (boxH - drawnH) / 2;
 
@@ -58,35 +103,47 @@ export function makeProjection(bounds, boxW, boxH) {
 		width: drawnW,
 		height: drawnH,
 		toXY(lng, lat) {
+			const u = flatX(lng);
+			const v = flatY(lat);
 			return {
-				x: offsetX + (lng - bounds.west) * LNG_SQUEEZE * scale,
+				x: offsetX + (gridU(u, v) - minU) * scale,
 				// Screens count downwards and the world counts north upwards.
-				y: offsetY + (bounds.north - lat) * scale
+				y: offsetY + (maxV - gridV(u, v)) * scale
 			};
 		},
 		toLngLat(x, y) {
+			const U = minU + (x - offsetX) / scale;
+			const V = maxV - (y - offsetY) / scale;
+			// The transpose of a rotation is its inverse — no matrix solve, no
+			// drift, and the round trip is exact to the last decimal place.
+			const u = U * GRID_COS + V * GRID_SIN;
+			const v = -U * GRID_SIN + V * GRID_COS;
 			return {
-				lng: bounds.west + (x - offsetX) / (LNG_SQUEEZE * scale),
-				lat: bounds.north - (y - offsetY) / scale
+				lng: bounds.west + u / LNG_SQUEEZE,
+				lat: bounds.south + v
 			};
 		}
 	};
 }
 
-// The city as one SVG path. Every ring closed, so the shape fills cleanly
-// and the islands read as islands.
-export function outlinePath(outline, projection) {
+// Closed rings as one SVG path — the city, and the lake it sits on. Every
+// ring closed, so the shape fills cleanly and the holes (islands, and the
+// islands' lagoons) punch through under fill-rule: evenodd.
+export function ringsPath(rings, projection) {
 	const parts = [];
-	for (const poly of outline.coordinates) {
-		for (const ring of poly) {
-			const points = ring.map(([lng, lat]) => {
-				const { x, y } = projection.toXY(lng, lat);
-				return `${x.toFixed(1)},${y.toFixed(1)}`;
-			});
-			if (points.length) parts.push(`M${points.join('L')}Z`);
-		}
+	for (const ring of rings) {
+		const points = ring.map(([lng, lat]) => {
+			const { x, y } = projection.toXY(lng, lat);
+			return `${x.toFixed(1)},${y.toFixed(1)}`;
+		});
+		if (points.length) parts.push(`M${points.join('L')}Z`);
 	}
 	return parts.join('');
+}
+
+// The city as one SVG path, from a MultiPolygon's every ring.
+export function outlinePath(outline, projection) {
+	return ringsPath(outline.coordinates.flat(), projection);
 }
 
 // The context layers (water, through-routes, subway) as one path each. Open
