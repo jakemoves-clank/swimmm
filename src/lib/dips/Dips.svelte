@@ -6,13 +6,12 @@
 	// handful of appointments. The difference is entirely in src/lib/dip.js
 	// and src/lib/appeal.js; this file is presentation and plumbing.
 	import { onMount } from 'svelte';
-	import { base } from '$app/paths';
 	import { torontoNow } from '$lib/time.js';
 	import { fetchTravelTimesFor } from '$lib/travel.js';
 	import { fetchTransitTimes } from '$lib/transit.js';
 	import { planDay } from '$lib/dip.js';
 	import { MODES, modeRule } from '$lib/appeal.js';
-	import { dayLabel } from '$lib/labels.js';
+	import { dayLabel, freshnessLabel } from '$lib/labels.js';
 	import DayPlanner from './DayPlanner.svelte';
 	import {
 		dipDurationMin,
@@ -62,6 +61,18 @@
 		const merged = new Map(travel);
 		for (const [id, t] of transitTimes) merged.set(id, { ...(merged.get(id) ?? {}), transit: t });
 		return merged;
+	});
+
+	// Which face of transit each pool's trip turned out to be — bus, subway or
+	// streetcar. It never reaches the dip, because it changes nothing about
+	// the offer: appeal.js weighs every transit trip the same way, and if this
+	// were a term on the dip it would be one nothing scores. It exists so the
+	// planner's trip line can carry the right icon, so the planner is where it
+	// is looked up.
+	const transitVia = $derived.by(() => {
+		const out = new Map();
+		for (const [id, t] of transitTimes ?? []) if (t.via) out.set(id, t.via);
+		return out;
 	});
 
 	// The day worth showing, which is usually today but is tomorrow at 11 p.m.
@@ -232,14 +243,6 @@
 		);
 	});
 
-	function fmtTime(min) {
-		let h = Math.floor(min / 60);
-		const m = ((min % 60) + 60) % 60;
-		const ampm = h >= 12 && h < 24 ? 'p.m.' : 'a.m.';
-		h = ((h % 12) + 12) % 12 || 12;
-		return `${h}:${String(m).padStart(2, '0')} ${ampm}`;
-	}
-
 </script>
 
 <svelte:head>
@@ -249,12 +252,43 @@
 <main>
 	<header>
 		<h1>Swimmm</h1>
-		<div class="kinds" role="group" aria-label="Swim type">
-			{#each SWIM_KINDS as k (k)}
-				<button class:active={kind === k} aria-pressed={kind === k} onclick={() => selectKind(k)}>
-					{SWIM_KIND_LABELS[k]}
+		<div class="controls">
+			<div class="kinds" role="group" aria-label="Swim type">
+				{#each SWIM_KINDS as k (k)}
+					<button class:active={kind === k} aria-pressed={kind === k} onclick={() => selectKind(k)}>
+						{SWIM_KIND_LABELS[k]}
+					</button>
+				{/each}
+			</div>
+			<!-- Where we are measuring from, for the reader who told us. It used
+			     to be a sentence and a "Move it" link under the header, which
+			     spent two lines of the one screen restating a thing the reader
+			     had just done. A pin says the same and asks nothing until it is
+			     wanted — but only ever as well as a name a screen reader can
+			     read, because an icon alone is a button labelled with a guess. -->
+			{#if placed}
+				<button
+					class="pin"
+					onclick={rePlace}
+					title="Measuring from the spot you picked — move it"
+					aria-label="Move the spot you're measuring from"
+				>
+					<svg
+						viewBox="0 0 24 24"
+						width="15"
+						height="15"
+						fill="none"
+						stroke="currentColor"
+						stroke-width="2"
+						stroke-linecap="round"
+						stroke-linejoin="round"
+						aria-hidden="true"
+					>
+						<path d="M12 21s7-6.3 7-11a7 7 0 1 0-14 0c0 4.7 7 11 7 11z" />
+						<circle cx="12" cy="10" r="2.5" />
+					</svg>
 				</button>
-			{/each}
+			{/if}
 		</div>
 	</header>
 
@@ -263,11 +297,6 @@
 			Swimmm is embedded in another page, so it won't ask your browser for your location — you can
 			place yourself below instead, or
 			<a href={selfUrl} target="_top" rel="noopener">open Swimmm directly</a>.
-		</p>
-	{:else if placed}
-		<p class="note">
-			Measuring from the spot you picked on the map.
-			<button class="linklike" onclick={rePlace}>Move it</button>
 		</p>
 	{/if}
 
@@ -291,14 +320,6 @@
 			<a href={CITY_SWIM_URLS[kind]}>city's {SWIM_KIND_NOUNS[kind]} schedules</a>.
 		</p>
 	{:else}
-		<p class="count">
-			{offer.length}
-			{offer.length === 1 ? 'dip' : 'dips'}
-			<!-- Named, because it isn't always today: at eleven at night, or on a
-			     holiday Monday with every pool shut, the planner has moved on to
-			     the next day that has water in it. -->
-			{plan.isToday ? 'left today' : whichDay} · adult {SWIM_KIND_NOUNS[kind]}
-		</p>
 		{#if degraded}
 			<p class="note">
 				We couldn't work out journey times just now, so these are straight-line distances — how
@@ -311,7 +332,7 @@
 				{whichDay}.
 			</p>
 		{/if}
-		<DayPlanner dips={offer} nowMin={plan.isToday ? plan.nowMin : null} {fmtTime} />
+		<DayPlanner dips={offer} nowMin={plan.isToday ? plan.nowMin : null} {transitVia} />
 		{#if unplacedCount > 0}
 			<p class="note">
 				{unplacedCount}
@@ -322,29 +343,56 @@
 	{/if}
 
 	<footer>
-		<p>
-			Data: <a href="https://open.toronto.ca/dataset/registered-programs-and-drop-in-courses-offering/"
-				>City of Toronto Open Data</a
-			>{#if data.schedule?.programs_last_refreshed}&nbsp;· city last updated
-				{data.schedule.programs_last_refreshed.slice(0, 10)}{/if}
-		</p>
-		<p>
-			<a href="{base}/v1">v1</a> · <a href="{base}/v2">v2 — design studies</a>
-		</p>
+		<!-- The city's own publication date, not ours — a stale build should
+		     read as stale, not as freshly deployed. -->
+		{#if data.schedule?.programs_last_refreshed}
+			<p>pool schedules updated {freshnessLabel(data.schedule.programs_last_refreshed)}</p>
+		{/if}
 	</footer>
 </main>
 
 <style>
 	/* Grayscale with a single accent, spent only on "now" — as the README has
-	   always said the site should be, and as v3 had drifted away from. */
+	   always said the site should be, and as v3 had drifted away from.
+	   Colour used to do two unrelated jobs with one hex: #0b66e4 marked both
+	   the live "now" line and every link and button, so a reader had no way
+	   to tell "this is happening" from "this is pressable" except context.
+	   --accent and --interactive are that split made permanent — one value
+	   per job, referenced everywhere instead of repeated, so the two can
+	   never drift back into meaning the same thing by accident. The greys
+	   are named for the same reason: a "medium grey" typed fresh at each
+	   call site tends to become a dozen almost-identical greys over time. */
+	:global(:root) {
+		/* The page itself, named because things other than the page have to
+		   paint it: the mode icon on a trip line sits on the ground rather
+		   than beside the line, and has to know what the ground is. */
+		--paper: #fff;
+		--ink: #1a1d21;
+		--ink-dim: #33383d;
+		--gray-600: #5f666d;
+		--gray-500: #7c838a;
+		--gray-400: #8a9097;
+		--gray-300: #9aa0a6;
+		--rule: #ececee;
+		--dip-bg: #eef1f4;
+		--dip-bg-progress: #e6ebf1;
+		--dip-bg-unrouted: #e7eaee;
+		--trip-rule: #b9c0c7;
+		/* Data emphasis only — currently just the "now" line/label. Dark
+		   enough on white to clear WCAG AA (4.5:1) as small bold text: this
+		   is ~5.2:1. */
+		--accent: #c2410c;
+		/* Links, buttons, anything pressable — and only those. */
+		--interactive: #0b66e4;
+	}
 	:global(html),
 	:global(body) {
 		height: 100%;
 	}
 	:global(body) {
 		margin: 0;
-		background: #fff;
-		color: #1a1d21;
+		background: var(--paper);
+		color: var(--ink);
 		font-family: system-ui, -apple-system, sans-serif;
 		-webkit-font-smoothing: antialiased;
 	}
@@ -373,6 +421,11 @@
 		letter-spacing: 0.01em;
 		margin: 0;
 	}
+	.controls {
+		display: flex;
+		align-items: center;
+		gap: 0.85rem;
+	}
 	/* A text switch, not a pill: the shadow, the track and the capsule were
 	   three pieces of ink for one bit of state. */
 	.kinds {
@@ -382,45 +435,59 @@
 	.kinds button {
 		border: 0;
 		background: none;
-		padding: 0 0 1px;
+		padding: 0 0 2px;
 		font: inherit;
 		font-size: 0.8125rem;
-		color: #8a9097;
+		color: var(--gray-400);
 		cursor: pointer;
 	}
+	/* A shadow rather than a border, because a border is part of the box: the
+	   active word was a pixel taller than the inactive one, so the whole
+	   header shifted every time the toggle was pressed — the control moving
+	   under the finger that pressed it. A box-shadow draws the same line and
+	   takes up no space at all. */
 	.kinds button.active {
-		color: #1a1d21;
-		border-bottom: 1px solid #1a1d21;
+		color: var(--ink);
+		box-shadow: 0 1px 0 var(--ink);
 	}
-	.count {
-		margin: 0;
-		font-size: 0.75rem;
-		color: #7c838a;
-		font-variant-numeric: tabular-nums;
+	/* Quiet until it is looked at: at rest it matches the unselected half of
+	   the toggle, and only says "pressable" when a pointer or the keyboard
+	   arrives on it. */
+	.pin {
+		border: 0;
+		background: none;
+		padding: 0;
+		display: flex;
+		color: var(--gray-400);
+		cursor: pointer;
+	}
+	.pin:hover,
+	.pin:focus-visible {
+		color: var(--interactive);
 	}
 	.status {
-		color: #5f666d;
+		color: var(--gray-600);
 		font-size: 0.875rem;
 		padding: 2rem 0;
 		max-width: 24rem;
 	}
 	.status a,
 	.note a {
-		color: #0b66e4;
+		color: var(--interactive);
 	}
 	.linklike {
 		border: 0;
 		background: none;
 		padding: 0;
 		font: inherit;
-		color: #0b66e4;
+		color: var(--interactive);
 		text-decoration: underline;
 		cursor: pointer;
 	}
 	.note {
 		font-size: 0.6875rem;
 		line-height: 1.45;
-		color: #8a9097;
+		color: var(--gray-400);
 		margin: 0;
 		max-width: 26rem;
 	}
@@ -428,15 +495,12 @@
 		margin-top: auto;
 		padding-top: 0.6rem;
 		font-size: 0.6875rem;
-		color: #9aa0a6;
+		color: var(--gray-300);
 		display: flex;
 		justify-content: space-between;
 		gap: 1rem;
 	}
 	footer p {
 		margin: 0;
-	}
-	footer a {
-		color: inherit;
 	}
 </style>

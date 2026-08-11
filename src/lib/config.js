@@ -29,6 +29,25 @@ export const DIP_DURATION_OPTIONS = [30, 45, 60];
 export const DEFAULT_DIP_DURATION_MIN = 45;
 export const DIP_START_STEP_MIN = 5;
 
+// How times are said, as opposed to how they are worked out. Every minute the
+// page prints — a departure, a trip length — is rounded to this step, so the
+// offer reads like an appointment ("leave 1:50, 15-min ride") rather than a
+// measurement ("leave 1:48, 12-min ride"). It is a display rule and nothing
+// more: the arithmetic behind a dip keeps its real minutes.
+//
+// Up, because a rounded-up trip is one you can keep — except when the time is
+// a single minute over the step, where up would spend four of the five
+// minutes the reader has for the sake of one, and a minute is well inside the
+// noise of any routed estimate. So 12:02 and 12:03 are both said as 12:05,
+// and 12:01 is said as 12:00.
+export const DISPLAY_STEP_MIN = 5;
+
+export function roundForDisplay(min) {
+	const over = ((min % DISPLAY_STEP_MIN) + DISPLAY_STEP_MIN) % DISPLAY_STEP_MIN;
+	if (over === 0) return min;
+	return over === 1 ? min - 1 : min + (DISPLAY_STEP_MIN - over);
+}
+
 // The two kinds of swim the city runs that an adult can just turn up to:
 // lane swim (lengths, in a lane) and leisure swim (open/unstructured). Also
 // the source of truth for `swimKind` in server/transform.js, so the payload

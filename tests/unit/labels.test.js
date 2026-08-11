@@ -1,5 +1,16 @@
 import { describe, it, expect } from 'vitest';
-import { dayLabel, dipSummary, reachPhrase, travelPhrase, variantLabel } from '../../src/lib/labels.js';
+import {
+	clockLabel,
+	clockRange,
+	dayLabel,
+	departurePhrase,
+	dipSummary,
+	freshnessLabel,
+	reachPhrase,
+	travelPhrase,
+	variantLabel
+} from '../../src/lib/labels.js';
+import { roundForDisplay } from '../../src/lib/config.js';
 
 // Titles below are real values from the city's Drop-in.json.
 const s = (kind, title) => ({ kind, title });
@@ -35,12 +46,92 @@ describe('variantLabel', () => {
 	});
 });
 
+// Lives in config.js, beside the other user-facing settings, because the
+// step is a taste rather than a fact — but every caller is a label, so it is
+// exercised here with them.
+describe('roundForDisplay', () => {
+	it('rounds a displayed minute up to the next five', () => {
+		expect(roundForDisplay(722)).toBe(725); // 12:02 → 12:05
+		expect(roundForDisplay(723)).toBe(725); // 12:03 → 12:05
+	});
+
+	// One minute over is the exception: rounding 12:01 up to 12:05 spends four
+	// of the five minutes the reader has, and a minute is inside the noise of
+	// any routed trip anyway.
+	it('rounds back down when it is only one minute over', () => {
+		expect(roundForDisplay(721)).toBe(720); // 12:01 → 12:00
+	});
+
+	it('leaves a time already on the step alone', () => {
+		expect(roundForDisplay(720)).toBe(720);
+		expect(roundForDisplay(725)).toBe(725);
+	});
+});
+
+describe('clockLabel', () => {
+	// A time you'd say out loud: no minutes on the hour, no dots, no space.
+	it('drops the minutes and the punctuation from an exact hour', () => {
+		expect(clockLabel(720)).toBe('12pm');
+		expect(clockLabel(840)).toBe('2pm');
+		expect(clockLabel(0)).toBe('12am');
+		expect(clockLabel(540)).toBe('9am');
+	});
+
+	it('keeps the minutes when there are any', () => {
+		expect(clockLabel(885)).toBe('2:45pm');
+		expect(clockLabel(555)).toBe('9:15am');
+	});
+});
+
+describe('clockRange', () => {
+	// "2pm–2:45pm" says the meridiem twice for one range. The second says it
+	// for both, the way a person writing it down would.
+	it('says the meridiem once when both ends share it', () => {
+		expect(clockRange(840, 885)).toBe('2–2:45pm');
+		expect(clockRange(780, 825)).toBe('1–1:45pm');
+	});
+
+	it('says it twice when the range crosses noon or midnight', () => {
+		expect(clockRange(690, 735)).toBe('11:30am–12:15pm');
+	});
+});
+
+describe('departurePhrase', () => {
+	// Near enough to act on, and a countdown is what you'd act on: "in 15
+	// mins" needs no clock and no subtraction.
+	it('counts down when the departure is within the hour', () => {
+		expect(departurePhrase(735, 720)).toBe('leave in 15 mins');
+		expect(departurePhrase(722, 720)).toBe('leave in 5 mins');
+	});
+
+	it('gives a clock time when the departure is further off', () => {
+		expect(departurePhrase(830, 720)).toBe('leave 1:50pm');
+		// Rounded to 60 minutes, "in 60 mins" is a clock time said the long
+		// way round.
+		expect(departurePhrase(778, 720)).toBe('leave 1pm');
+	});
+
+	// The departure has passed and the dip is still on: you're close enough to
+	// a session already in the water to make it if you go.
+	it('says to go now once the departure has passed', () => {
+		expect(departurePhrase(715, 720)).toBe('leave now');
+		expect(departurePhrase(721, 720)).toBe('leave now');
+	});
+
+	// A planner showing tomorrow has no "now" to count down from.
+	it('gives a clock time when there is no now', () => {
+		expect(departurePhrase(535, null)).toBe('leave 8:55am');
+	});
+});
+
 describe('travelPhrase', () => {
+	// Minutes are rounded for display like every other time on the page — an
+	// 18-minute trip offered as "20-min" is a promise you can keep.
 	it('names each way of getting there the way a person would say it', () => {
 		expect(travelPhrase('walk', 10)).toBe('10-min walk');
-		expect(travelPhrase('bike', 12)).toBe('12-min ride');
-		expect(travelPhrase('transit', 18)).toBe('18-min transit trip');
-		expect(travelPhrase('drive', 9)).toBe('9-min drive');
+		expect(travelPhrase('bike', 12)).toBe('15-min ride');
+		expect(travelPhrase('transit', 18)).toBe('20-min transit trip');
+		expect(travelPhrase('drive', 9)).toBe('10-min drive');
 	});
 
 	it('says nothing rather than something wrong when the mode is unknown', () => {
@@ -83,9 +174,26 @@ describe('dayLabel', () => {
 	});
 });
 
+describe('freshnessLabel', () => {
+	it('formats a bare date, abbreviated month and no comma', () => {
+		expect(freshnessLabel('2026-08-29')).toBe('Aug 29 2026');
+	});
+
+	// The city's stamp carries a time, and fixtures append a note of their
+	// own — the leading date is the only part that has to parse.
+	it('tolerates a time and a trailing note the city or a fixture appends', () => {
+		expect(freshnessLabel('2026-07-23 21:38:47 (seeded)')).toBe('Jul 23 2026');
+	});
+
+	it('returns empty rather than throwing on a missing or unparseable stamp', () => {
+		expect(freshnessLabel(undefined)).toBe('');
+		expect(freshnessLabel('not a date')).toBe('');
+	});
+});
+
 describe('reachPhrase', () => {
 	it('names the trip when we routed one', () => {
-		expect(reachPhrase({ routed: true, mode: 'bike', travelMin: 12 })).toBe('12-min ride');
+		expect(reachPhrase({ routed: true, mode: 'bike', travelMin: 12 })).toBe('15-min ride');
 	});
 
 	// No routed trip: say how far, and let the reader judge the trip. Never

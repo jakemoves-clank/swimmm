@@ -167,7 +167,7 @@
 		height: auto;
 	}
 	.map:focus-visible {
-		outline: 3px solid #0b66e4;
+		outline: 3px solid var(--interactive);
 		outline-offset: 2px;
 	}
 	/* Three tones under the marker, each quieter than the data on top of it.
@@ -194,10 +194,10 @@
 		stroke-linecap: round;
 	}
 	.mark .halo {
-		fill: rgb(11 102 228 / 0.18);
+		fill: color-mix(in srgb, var(--interactive) 18%, transparent);
 	}
 	.mark .dot {
-		fill: #0b66e4;
+		fill: var(--interactive);
 		stroke: #fff;
 		stroke-width: 1.5;
 	}
@@ -212,7 +212,7 @@
 		width: 100%;
 		border: 0;
 		border-radius: 999px;
-		background: #0b66e4;
+		background: var(--interactive);
 		color: #fff;
 		font: 600 0.95rem/1 inherit;
 		padding: 0.7rem 1rem;

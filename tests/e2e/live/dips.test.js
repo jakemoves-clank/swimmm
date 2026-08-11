@@ -52,10 +52,21 @@ test('offers a dip as an appointment: when to leave, when you are in the water',
 	// The default 45-minute dip inside the 2–3 p.m. lane swim. The length is
 	// not printed: the range already says 45 minutes, and saying it twice is
 	// redundant ink. It appears only when the dip is shorter than you asked.
-	await expect(dip).toContainText('2:00 p.m.–2:45 p.m.');
+	await expect(dip).toContainText('2–2:45pm');
 	await expect(dip).not.toContainText('45 min');
 	await expect(dip).toContainText('10-min walk');
-	await expect(dip).toContainText('leave 1:50 p.m.');
+	await expect(dip).toContainText('leave 1:50pm');
+	// The dip is a window inside a longer swim, and the block says so: you
+	// could arrive later, or stay on until the session itself ends at 3.
+	await expect(dip).toContainText('open until 3pm');
+});
+
+// A hairline from departure to water is a hairline until something says what
+// kind of trip it is. The mode rides on the line itself, as an icon.
+test('says on the trip line how you would be getting there', async ({ page }) => {
+	await page.goto('/');
+
+	await expect(page.locator('.trip-rule .mode')).toHaveCount(1);
 });
 
 test('offers nothing at a pool no mode can reach in time', async ({ page }) => {
@@ -69,18 +80,18 @@ test('?dip=30 books a shorter window in the same water', async ({ page }) => {
 	await page.goto('/?dip=30');
 
 	const dip = page.locator('.dip').first();
-	await expect(dip).toContainText('2:00 p.m.–2:30 p.m.');
+	await expect(dip).toContainText('2–2:30pm');
 });
 
 test('the lane/leisure toggle changes what you are offered, and rides in the URL', async ({
 	page
 }) => {
 	await page.goto('/');
-	await expect(page.locator('.dip').first()).toContainText('2:00 p.m.–2:45 p.m.');
+	await expect(page.locator('.dip').first()).toContainText('2–2:45pm');
 
 	await page.getByRole('button', { name: 'Leisure' }).click();
 	// Leisure at Nearby Pool runs 1–2:30 p.m., so the dip starts an hour earlier.
-	await expect(page.locator('.dip').first()).toContainText('1:00 p.m.–1:45 p.m.');
+	await expect(page.locator('.dip').first()).toContainText('1–1:45pm');
 	await expect(page).toHaveURL(/kind=leisure/);
 });
 
@@ -94,7 +105,7 @@ test('degrades to distances, saying so, when it cannot route a trip', async ({ p
 
 	const dip = page.locator('.dip').first();
 	await expect(dip).toContainText('Nearby Pool');
-	await expect(dip).toContainText('2:00 p.m.–2:45 p.m.');
+	await expect(dip).toContainText('2–2:45pm');
 	await expect(dip).toContainText('km away');
 	await expect(dip).not.toContainText('leave');
 	await expect(page.getByText(/straight-line distances/)).toBeVisible();
@@ -129,10 +140,12 @@ test('rolls on to the next day once tonight has nothing left', async ({ page }) 
 	await page.clock.setFixedTime(lateNight);
 	await page.goto('/');
 
-	await expect(page.getByText(/dip.*tomorrow/)).toBeVisible();
+	// The header no longer counts the dips or names the day; the note that
+	// explains *why* you are looking at another day is what says it now.
+	await expect(page.getByText(/so this is\s+tomorrow/)).toBeVisible();
 	const dip = page.locator('.dip').first();
 	await expect(dip).toContainText('Nearby Pool');
-	await expect(dip).toContainText('9:00 a.m.–9:45 a.m.');
+	await expect(dip).toContainText('9–9:45am');
 	// Tomorrow has no "now" on it, so the planner draws no now line.
 	await expect(page.locator('.now')).toHaveCount(0);
 });
@@ -145,12 +158,14 @@ test('still offers today when asked before any pool has opened', async ({ page }
 	await page.clock.setFixedTime(smallHours);
 	await page.goto('/');
 
-	await expect(page.getByText(/left today/)).toBeVisible();
-	await expect(page.locator('.dip').first()).toContainText('2:00 p.m.–2:45 p.m.');
+	// Today, so the planner says nothing about which day it is showing — the
+	// "so this is tomorrow" note is the only day label left, and it is absent.
+	await expect(page.getByText(/so this is/)).toHaveCount(0);
+	await expect(page.locator('.dip').first()).toContainText('2–2:45pm');
 	// The axis leads in from an hour before the 1:50 p.m. departure, rather
 	// than drawing ten hours of empty night from 3 a.m. to get there.
-	await expect(page.locator('.hour').first()).toContainText('12p');
-	await expect(page.getByText('3a', { exact: true })).toHaveCount(0);
+	await expect(page.locator('.hour').first()).toContainText('12pm');
+	await expect(page.getByText('3am', { exact: true })).toHaveCount(0);
 });
 
 // v3 never measures from a landmark and calls the result yours. Decline the
@@ -181,7 +196,9 @@ test.describe('when the browser will not say where you are', () => {
 		await map.click({ position: { x: box.width * 0.45, y: box.height * 0.62 } });
 		await page.getByRole('button', { name: /Show dips from here/ }).click();
 
-		await expect(page.getByText(/Measuring from the spot you picked/)).toBeVisible();
+		// The sentence about where we are measuring from is now a pin in the
+		// nav, which is also the way back to the map.
+		await expect(page.getByRole('button', { name: /Move the spot/ })).toBeVisible();
 		await expect(page.locator('.dip').first()).toContainText('Nearby Pool');
 	});
 
@@ -195,7 +212,7 @@ test.describe('when the browser will not say where you are', () => {
 		await page.keyboard.press('ArrowDown');
 		await page.keyboard.press('Enter');
 
-		await expect(page.getByText(/Measuring from the spot you picked/)).toBeVisible();
+		await expect(page.getByRole('button', { name: /Move the spot/ })).toBeVisible();
 	});
 });
 
@@ -206,11 +223,11 @@ test('an hour rule sits level with a dip that starts on that hour', async ({ pag
 	await page.goto('/');
 
 	// The seeded lane swim starts at 2:00 p.m. exactly, so its block's top edge
-	// and the 2p rule should be the same line.
+	// and the 2pm rule should be the same line.
 	const block = await page.locator('.slot').first().boundingBox();
 	const rule = await page
 		.locator('.hour')
-		.filter({ hasText: '2p' })
+		.filter({ hasText: /^\s*2pm\s*$/ })
 		.locator('.hrule')
 		.boundingBox();
 

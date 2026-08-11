@@ -37,6 +37,34 @@ describe('layoutDips', () => {
 		expect(laid.every((l) => l.lanes === 2)).toBe(true);
 	});
 
+	// The trip is drawn above its own block, in its own column, so a dip's ink
+	// begins when you would leave rather than when you get in. Judged on the
+	// water alone these two never meet; judged on the ink, the earlier block
+	// is sitting on top of the later one's trip line and hiding it.
+	it('counts an earlier block covering a later block’s trip line as a clash', () => {
+		const laid = layoutDips([dip(600, 645), dip(660, 705, { leaveBy: 640 })]);
+		expect(laid.map((l) => l.lane)).toEqual([0, 1]);
+		expect(laid.every((l) => l.lanes === 2)).toBe(true);
+	});
+
+	it('leaves both at full width when the trip starts after the earlier block ends', () => {
+		const laid = layoutDips([dip(600, 645), dip(660, 705, { leaveBy: 650 })]);
+		expect(laid.map((l) => [l.lane, l.lanes])).toEqual([
+			[0, 1],
+			[0, 1]
+		]);
+	});
+
+	// A dip we couldn't route has no departure time and so draws no trip line
+	// — it must not claim the time before it as though it had one.
+	it('claims no time before the water for a dip with no routed trip', () => {
+		const laid = layoutDips([dip(600, 645), dip(650, 695, { leaveBy: null })]);
+		expect(laid.map((l) => [l.lane, l.lanes])).toEqual([
+			[0, 1],
+			[0, 1]
+		]);
+	});
+
 	it('reads the day in order however the dips arrived', () => {
 		const laid = layoutDips([dip(720, 765), dip(600, 645)]);
 		expect(laid.map((l) => l.dip.start_min)).toEqual([600, 720]);

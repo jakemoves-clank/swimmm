@@ -10,6 +10,20 @@
 // the handful so that dips rarely share a time, but it is allowed to return
 // overlapping ones when the day offers nothing else — so the planner has to
 // draw them, side by side, rather than stacking them on top of each other.
+//
+// What a dip occupies is not its window in the water but its ink: the trip is
+// drawn above the block, in the block's own column, so the dip claims the
+// page from when you would leave. Judged on the water alone, a 3:00 dip you
+// leave for at 2:40 does not clash with a 2:15–3:00 one — and then the
+// earlier block is drawn straight over the later one's trip line, and the
+// number that makes a dip an appointment is the one thing you cannot see.
+// A dip we could not route has no departure and draws no line, so it claims
+// nothing before the water.
+function occupies(dip) {
+	const from = dip.leaveBy != null ? Math.min(dip.leaveBy, dip.start_min) : dip.start_min;
+	return { start_min: from, end_min: dip.end_min };
+}
+
 function overlaps(a, b) {
 	return a.start_min < b.end_min && b.start_min < a.end_min;
 }
@@ -36,16 +50,17 @@ export function layoutDips(dips) {
 	};
 
 	for (const dip of ordered) {
-		if (dip.start_min >= groupEnd) closeGroup();
+		const ink = occupies(dip);
+		if (ink.start_min >= groupEnd) closeGroup();
 
 		// First sub-column free at this time; a fresh one if they're all busy.
 		let lane = 0;
-		while (group.some((g) => g.lane === lane && overlaps(g.dip, dip))) lane++;
+		while (group.some((g) => g.lane === lane && overlaps(occupies(g.dip), ink))) lane++;
 
 		const entry = { dip, lane, lanes: 1 };
 		group.push(entry);
 		laid.push(entry);
-		groupEnd = Math.max(groupEnd, dip.end_min);
+		groupEnd = Math.max(groupEnd, ink.end_min);
 	}
 	closeGroup();
 
