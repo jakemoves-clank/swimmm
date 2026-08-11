@@ -164,6 +164,12 @@
 		position: absolute;
 		inset: 0;
 	}
+	/* `top` places the row's edge, but the rule is centred inside it, so
+	   without this the rule lands half a label-height *below* its own time —
+	   about two minutes at full scale and eleven at the compressed floor. In a
+	   chart whose whole claim is that position is time, that is the axis
+	   lying. Pull the row up by half its height so the rule sits exactly on
+	   the minute it names, level with a dip that starts on it. */
 	.hour,
 	.now {
 		position: absolute;
@@ -172,6 +178,7 @@
 		display: flex;
 		align-items: center;
 		gap: 0.4rem;
+		transform: translateY(-50%);
 	}
 	.hlabel,
 	.nowlabel {

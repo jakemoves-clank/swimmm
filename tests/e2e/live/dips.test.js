@@ -198,3 +198,21 @@ test.describe('when the browser will not say where you are', () => {
 		await expect(page.getByText(/Measuring from the spot you picked/)).toBeVisible();
 	});
 });
+
+// The planner's claim is that distance down the page is time, so an hour rule
+// has to sit on its own minute. It is drawn inside a flex row that centres it,
+// which once put every rule — and the "now" line — half a label-height late.
+test('an hour rule sits level with a dip that starts on that hour', async ({ page }) => {
+	await page.goto('/');
+
+	// The seeded lane swim starts at 2:00 p.m. exactly, so its block's top edge
+	// and the 2p rule should be the same line.
+	const block = await page.locator('.slot').first().boundingBox();
+	const rule = await page
+		.locator('.hour')
+		.filter({ hasText: '2p' })
+		.locator('.hrule')
+		.boundingBox();
+
+	expect(Math.abs(rule.y - block.y)).toBeLessThanOrEqual(1);
+});
