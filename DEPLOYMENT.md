@@ -83,9 +83,11 @@ Notes on how it stays honest:
 - Each preview builds in its own directory and only its output is copied, to
   `/pr-N/` and nowhere else — so a PR's build cannot reach the site root.
 - Previews reuse the root build's already-downloaded city data via
-  `SWIMMM_DATA_FILE`: one download per deploy rather than one per PR, and a
-  preview then differs from production only by the PR's code, never by data
-  that moved between builds.
+  `SWIMMM_CACHE_DIR`, pointed at one cache directory shared by the root build
+  and every preview: one download per deploy rather than one per PR. That
+  directory holds the city's raw feeds, not a finished schedule, so each
+  preview still runs its own `transform.js`/`cityData.js` over them — a PR
+  changing the data pipeline sees that change in its own preview.
 - `BASE_PATH` is the only build difference (`/swimmm/pr-N`). Assets are
   emitted relative, so nothing else changes.
 - The Mapbox URL restriction below is per **origin**, not per path, so
