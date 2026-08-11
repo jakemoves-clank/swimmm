@@ -1,18 +1,25 @@
 <script>
-	// The day planner, after v2's Concept 02 — but turned through ninety
-	// degrees in what it's about. The concept put one column per pool and
-	// asked you to compare fourteen of them; this asks nothing of the sort.
-	// There is one column, it is your afternoon, and the blocks on it are the
-	// dips you've been offered.
+	// The day planner, after /v2's Concept 02 — the timetable and Bertin's
+	// reorderable matrix — but turned through ninety degrees in what it is
+	// about. The concept put one column per pool and asked you to compare
+	// fourteen; this has one column, the rest of your day, with the offered
+	// dips on it.
 	//
-	// The axis is real: distance down the page is time, at a fixed scale, so
-	// "I'm free between 2 and 4" is answered by looking at one band of the
-	// page rather than by reading five cards. That's the whole reason it's a
-	// planner and not a list.
+	// Two rules, both Tufte's:
 	//
-	// Built in HTML and CSS rather than SVG, unlike the concept: every dip
-	// here is real text a screen reader can read and a thumb can hit, and
-	// there are five of them, not sixty.
+	// 1. It fits on the screen. The scale is computed from the height
+	//    available rather than fixed, and the axis starts at now — the morning
+	//    you slept through is not an option you can take, so drawing it is ink
+	//    that says nothing. A reader should see the whole offer without
+	//    scrolling, because the question ("when could I go?") is about the
+	//    shape of the day, and you cannot see a shape a screen at a time.
+	//
+	// 2. Nothing is drawn twice. The block's position and height already say
+	//    when the dip starts and how long it runs, so the duration is printed
+	//    only when it isn't what you asked for; the trip is a rule from
+	//    departure to water rather than a hatched band; and there are no
+	//    borders, no shadows and no rounded corners, because none of them
+	//    carry a number. What is left is type on a grid.
 	import { layoutDips, planSpan } from './layout.js';
 	import { reachPhrase } from '$lib/labels.js';
 
@@ -20,177 +27,184 @@
 	// is no "now" on tomorrow, and nothing on it is in progress or late.
 	let { dips, nowMin, fmtTime } = $props();
 
-	// Two pixels a minute: a 30-minute dip — the shortest we offer — is 60px,
-	// which is two lines of text, so no block is ever too small to read and
-	// the scale never has to lie about a short dip to make it legible.
-	const PX_PER_MIN = 2;
+	// The scale floor. Below about this, a 30-minute dip is too short to hold
+	// its own name and the planner stops being readable — so past this point
+	// it keeps the scale and lets the column scroll instead of shrinking into
+	// illegibility. A day that busy is a good problem.
+	const MIN_PX_PER_MIN = 0.55;
+	const MAX_PX_PER_MIN = 3;
+	// Below this a block holds one line, not four.
+	const TERSE_PX = 40;
+
+	let boxHeight = $state(0);
 
 	const span = $derived(planSpan(dips, nowMin));
+	const minutes = $derived(Math.max(1, span[1] - span[0]));
+	const scale = $derived(
+		Math.min(MAX_PX_PER_MIN, Math.max(MIN_PX_PER_MIN, (boxHeight || 480) / minutes))
+	);
+	const height = $derived(minutes * scale);
 	const laid = $derived(layoutDips(dips));
-	const height = $derived((span[1] - span[0]) * PX_PER_MIN);
-	const y = (min) => (min - span[0]) * PX_PER_MIN;
+	const y = (min) => (min - span[0]) * scale;
 
-	// An hour label sitting under the "now" label would print one on top of
-	// the other, and "now" is the more useful of the two — so the hour it
-	// lands on gives way. A label is about 12 minutes tall at this scale.
-	const LABEL_CLEARANCE_MIN = 12;
+	// Hourly while there is room for hourly; every two or three hours when the
+	// day is long and the scale has tightened. An axis whose labels collide is
+	// worse than an axis with fewer of them.
+	const step = $derived(scale * 60 >= 34 ? 60 : scale * 60 >= 18 ? 120 : 180);
 
 	const hours = $derived.by(() => {
 		const out = [];
-		for (let t = span[0]; t <= span[1]; t += 60) {
-			if (nowMin != null && Math.abs(t - nowMin) < LABEL_CLEARANCE_MIN) continue;
+		const first = Math.ceil(span[0] / step) * step;
+		for (let t = first; t <= span[1]; t += step) {
+			if (nowMin != null && Math.abs(t - nowMin) * scale < 9) continue;
 			out.push(t);
 		}
 		return out;
 	});
 
-	// Hour labels only need the hour: the axis carries the rest.
 	function fmtHour(min) {
 		const h = Math.floor(min / 60) % 24;
-		const ampm = h >= 12 ? 'pm' : 'am';
-		return `${h % 12 || 12}${ampm}`;
+		return `${h % 12 || 12}${h >= 12 ? 'p' : 'a'}`;
 	}
 </script>
 
-<div class="planner" style="--h: {height}px">
-	<div class="axis" aria-hidden="true">
-		{#each hours as t (t)}
-			<div class="hour" style="top: {y(t)}px">
-				<span class="hlabel">{fmtHour(t)}</span>
-				<span class="hrule"></span>
-			</div>
-		{/each}
-	</div>
-
-	{#if nowMin != null && nowMin >= span[0] && nowMin <= span[1]}
-		<div class="now" style="top: {y(nowMin)}px" aria-hidden="true">
-			<span class="nowlabel">now</span>
-			<span class="nowrule"></span>
+<div class="planner" bind:clientHeight={boxHeight}>
+	<div class="canvas" style="height: {height}px">
+		<div class="axis" aria-hidden="true">
+			{#each hours as t (t)}
+				<div class="hour" style="top: {y(t)}px">
+					<span class="hlabel">{fmtHour(t)}</span>
+					<span class="hrule"></span>
+				</div>
+			{/each}
 		</div>
-	{/if}
 
-	<ol class="blocks">
-		{#each laid as { dip, lane, lanes } (dip.id)}
-			<li
-				class="slot"
-				class:in-progress={dip.inProgress}
-				class:unrouted={!dip.routed}
-				style="top: {y(dip.start_min)}px; height: {(dip.end_min - dip.start_min) *
-					PX_PER_MIN}px; left: calc({(lane / lanes) * 100}% + {lane ? 0.25 : 0}rem); width: calc({(1 /
-					lanes) *
-					100}% - {lanes > 1 ? 0.25 : 0}rem)"
-			>
-				<!-- The trip, drawn where it actually happens: the hatched run
-				     from when you'd leave to when you'd be in the water. It is
-				     the thing a wall calendar can't tell you, and the reason a
-				     dip is an appointment rather than an opening time. -->
-				{#if dip.routed}
-					<span
-						class="shadow"
-						style="top: {(dip.leaveBy - dip.start_min) * PX_PER_MIN}px; height: {(dip.start_min -
-							dip.leaveBy) *
-							PX_PER_MIN}px"
-						aria-hidden="true"
-					></span>
-				{/if}
+		{#if nowMin != null && nowMin >= span[0] && nowMin <= span[1]}
+			<div class="now" style="top: {y(nowMin)}px" aria-hidden="true">
+				<span class="nowlabel">now</span>
+				<span class="nowrule"></span>
+			</div>
+		{/if}
 
-				<article class="dip">
-					<h3>{dip.location.name}</h3>
-					<p class="when">
-						{fmtTime(dip.start_min)}–{fmtTime(dip.end_min)}
-						<span class="dur">{dip.durationMin} min</span>
-					</p>
-					<p class="trip">
-						{#if dip.routed}
-							{nowMin != null && dip.leaveBy <= nowMin
-								? 'leave now'
-								: `leave ${fmtTime(dip.leaveBy)}`} ·
-						{/if}
-						{reachPhrase(dip)}
-					</p>
-					{#if dip.session.variant || dip.shortfallMin > 0 || dip.location.approx}
-						<p class="aside">
-							{#if dip.session.variant}<span class="variant">{dip.session.variant}</span>{/if}
-							{#if dip.location.approx}
-								<span class="variant" title="The city publishes no location for this pool, so the trip is measured to the complex it sits in"
-									>approx. location</span
-								>
-							{/if}
-							{#if dip.shortfallMin > 0}
-								<span class="short"
-									>{dip.durationMin} min, not {dip.preferredMin} — the water goes at {fmtTime(
-										dip.session.end_min
-									)}</span
-								>
-							{/if}
-						</p>
+		<ol class="blocks">
+			{#each laid as { dip, lane, lanes } (dip.id)}
+				{@const h = (dip.end_min - dip.start_min) * scale}
+				{@const terse = h < TERSE_PX}
+				<li
+					class="slot"
+					class:in-progress={dip.inProgress}
+					class:unrouted={!dip.routed}
+					style="top: {y(dip.start_min)}px; height: {h}px; left: calc({(lane / lanes) *
+						100}% + {lane ? 0.2 : 0}rem); width: calc({(1 / lanes) * 100}% - {lanes > 1
+						? 0.2
+						: 0}rem)"
+				>
+					<!-- The trip, drawn where it happens: a rule from when you would
+					     leave to when you would be in the water. The concept hatched
+					     this band; a hairline and a tick say the same thing with a
+					     twentieth of the ink. -->
+					{#if dip.routed && dip.leaveBy < dip.start_min}
+						<span
+							class="trip-rule"
+							style="top: {(dip.leaveBy - dip.start_min) * scale}px; height: {(dip.start_min -
+								dip.leaveBy) * scale}px"
+							aria-hidden="true"
+						></span>
 					{/if}
-				</article>
-			</li>
-		{/each}
-	</ol>
+
+					<article class="dip">
+						{#if terse}
+							<p class="tight">
+								<span class="clock">{fmtTime(dip.start_min)}</span>
+								<span class="pool">{dip.location.name}</span>
+								<span class="reach">{reachPhrase(dip)}</span>
+							</p>
+						{:else}
+							<h3 class="pool">{dip.location.name}</h3>
+							<p class="when">
+								<span class="clock">{fmtTime(dip.start_min)}–{fmtTime(dip.end_min)}</span>
+								{#if dip.shortfallMin > 0}
+									<span class="short">{dip.durationMin} min, not {dip.preferredMin}</span>
+								{/if}
+							</p>
+							<p class="trip">
+								{#if dip.routed}
+									{nowMin != null && dip.leaveBy <= nowMin
+										? 'leave now'
+										: `leave ${fmtTime(dip.leaveBy)}`}&nbsp;·
+								{/if}
+								{reachPhrase(dip)}{#if dip.location.approx}
+									<span class="approx" title="The city publishes no location for this pool, so the trip is measured to the complex it sits in">≈</span>
+								{/if}
+							</p>
+							{#if dip.session.variant && h > 74}
+								<p class="variant">{dip.session.variant}</p>
+							{/if}
+						{/if}
+					</article>
+				</li>
+			{/each}
+		</ol>
+	</div>
 </div>
 
 <style>
 	.planner {
+		flex: 1;
+		min-height: 0;
+		overflow-y: auto;
+		/* The axis gutter. Times are right-aligned into it so the hour column
+		   and the block column each have one edge. */
+		padding-left: 2.1rem;
+	}
+	.canvas {
 		position: relative;
-		height: var(--h);
-		margin: 0.5rem 0 1rem;
-		padding-left: 2.75rem;
 	}
 	.axis {
 		position: absolute;
 		inset: 0;
 	}
-	.hour {
+	.hour,
+	.now {
 		position: absolute;
-		left: 0;
+		left: -2.1rem;
 		right: 0;
 		display: flex;
 		align-items: center;
 		gap: 0.4rem;
 	}
-	.hlabel {
-		width: 2.4rem;
-		text-align: right;
-		font-size: 0.7rem;
-		color: #999;
-		font-variant-numeric: tabular-nums;
+	.hlabel,
+	.nowlabel {
+		width: 1.7rem;
 		flex: none;
+		text-align: right;
+		font-size: 0.6875rem;
+		font-variant-numeric: tabular-nums;
+		letter-spacing: 0.01em;
+	}
+	.hlabel {
+		color: #9aa0a6;
 	}
 	.hrule {
 		flex: 1;
-		border-top: 1px solid #e4e4e4;
+		border-top: 1px solid #ececee;
 	}
-	/* Laid out like an hour row so "now" reads as one more label on the same
-	   axis, rather than a floating tag that can run off the right edge. */
+	/* The one accent on the page, spent on the one thing that moves. */
 	.now {
-		position: absolute;
-		left: 0;
-		right: 0;
-		display: flex;
-		align-items: center;
-		gap: 0.4rem;
 		z-index: 2;
 		pointer-events: none;
 	}
 	.nowlabel {
-		width: 2.4rem;
-		text-align: right;
-		font-size: 0.65rem;
-		font-weight: 700;
-		letter-spacing: 0.04em;
-		text-transform: uppercase;
 		color: #0b66e4;
-		flex: none;
+		font-weight: 600;
 	}
 	.nowrule {
 		flex: 1;
-		border-top: 2px solid #0b66e4;
+		border-top: 1px solid #0b66e4;
 	}
 	.blocks {
 		position: absolute;
-		inset: 0 0 0 2.75rem;
+		inset: 0;
 		list-style: none;
 		margin: 0;
 		padding: 0;
@@ -198,79 +212,90 @@
 	.slot {
 		position: absolute;
 	}
-	/* The trip sits above its block, outside it, so the block's own height
-	   stays honest about how long you'd be in the water. It can reach back
-	   over the dip before it — you would be leaving while that one is still
-	   in the water, which is true and worth seeing — so it paints *under*
-	   the cards rather than across them. */
-	.shadow {
+	.trip-rule {
 		position: absolute;
 		left: 0;
-		right: 0;
+		width: 0;
+		border-left: 1px solid #b9c0c7;
 		z-index: 0;
-		border-left: 2px solid #c9d4e2;
-		background: repeating-linear-gradient(
-			45deg,
-			#dbe3ec 0 1px,
-			transparent 1px 5px
-		);
 	}
-	/* No routed trip: a dashed edge and a muted rule, so a distance-only dip
-	   never passes for one we worked the journey out for. */
-	.slot.unrouted .dip {
-		border-left-style: dashed;
-		border-left-color: #9bb0c7;
+	.trip-rule::before {
+		/* The departure itself: a tick you can put a finger on. */
+		content: '';
+		position: absolute;
+		top: 0;
+		left: -2px;
+		width: 5px;
+		border-top: 1px solid #b9c0c7;
 	}
-	.slot.unrouted .trip {
-		color: #5d6b7a;
-	}
+	/* No border, no radius, no shadow: a pale ground is all it takes to read
+	   as a block against the rules, and the rest was decoration. */
 	.dip {
 		position: relative;
 		z-index: 1;
 		height: 100%;
 		box-sizing: border-box;
 		overflow: hidden;
-		background: #fff;
-		border: 1px solid #cfd8e3;
-		border-left: 4px solid #0b66e4;
-		border-radius: 0.4rem;
-		padding: 0.35rem 0.5rem;
+		background: #eef1f4;
+		padding: 0.15rem 0.4rem;
 	}
 	.slot.in-progress .dip {
-		background: #f2f7ff;
+		background: #e6ebf1;
 	}
-	h3 {
-		margin: 0;
-		font-size: 0.9rem;
+	/* A dip we could not route: the same block, drawn on a hatch so it cannot
+	   pass for one whose trip we measured. */
+	.slot.unrouted .dip {
+		background: repeating-linear-gradient(45deg, #eef1f4 0 5px, #e7eaee 5px 10px);
+	}
+	.pool {
+		font-size: 0.8125rem;
 		font-weight: 600;
-		line-height: 1.2;
+		line-height: 1.25;
+		margin: 0;
+		color: #1a1d21;
 	}
-	.when {
-		margin: 0.1rem 0 0;
-		font-size: 0.8rem;
-		color: #333;
+	.when,
+	.trip,
+	.variant,
+	.tight {
+		margin: 0;
+		line-height: 1.35;
 	}
-	.dur {
-		color: #888;
-		font-size: 0.72rem;
+	.clock {
+		font-size: 0.75rem;
+		font-variant-numeric: tabular-nums;
+		color: #33383d;
 	}
 	.trip {
-		margin: 0.1rem 0 0;
-		font-size: 0.75rem;
-		color: #0b66e4;
+		font-size: 0.6875rem;
+		color: #5f666d;
 	}
-	.aside {
-		margin: 0.15rem 0 0;
-		font-size: 0.7rem;
-		color: #777;
-		display: flex;
-		flex-wrap: wrap;
-		gap: 0.3rem;
-	}
+	.short,
 	.variant {
-		background: #eee;
-		border-radius: 0.3rem;
-		padding: 0 0.3rem;
-		color: #555;
+		font-size: 0.6875rem;
+		color: #7c838a;
+	}
+	.approx {
+		color: #9aa0a6;
+	}
+	/* One line, for a block too short to hold four. Name first — at a glance
+	   the question is which pool, and the clock is already the y-axis. */
+	.tight {
+		display: flex;
+		gap: 0.35rem;
+		align-items: baseline;
+		white-space: nowrap;
+		overflow: hidden;
+	}
+	.tight .pool {
+		font-size: 0.75rem;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+	.tight .reach {
+		font-size: 0.6875rem;
+		color: #5f666d;
+		margin-left: auto;
+		flex: none;
 	}
 </style>

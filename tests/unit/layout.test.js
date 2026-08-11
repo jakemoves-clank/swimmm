@@ -48,11 +48,16 @@ describe('layoutDips', () => {
 });
 
 describe('planSpan', () => {
-	// The 9:05 departure is already behind you — the session is running and
-	// you're late, which the planner still has to have room to draw.
 	it('runs from the hour you would set off to the hour the last dip ends', () => {
+		expect(planSpan([dip(620, 665), dip(800, 845)], 600)).toEqual([600, 900]);
+	});
+
+	// The morning you slept through is not an option you can take, and on a
+	// screen that has to hold the whole offer at once it is the first thing
+	// that should go. A departure already behind you starts at now instead.
+	it('never draws the part of the day that has already gone', () => {
 		const running = dip(560, 605, { leaveBy: 545 });
-		expect(planSpan([running, dip(800, 845)], 600)).toEqual([540, 900]);
+		expect(planSpan([running, dip(800, 845)], 600)[0]).toBe(600);
 	});
 
 	it('starts at now when now is nearly time to set off', () => {

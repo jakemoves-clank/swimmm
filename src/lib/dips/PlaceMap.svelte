@@ -13,25 +13,28 @@
 	// to be good enough to rank a walk against a ride, and the point gets
 	// snapped to a ~50 m grid before any routing provider sees it anyway.
 	import { TORONTO_OUTLINE } from '$lib/geo/torontoOutline.js';
-	import { cityBounds, makeProjection, outlinePath } from './placemap.js';
+	import { TORONTO_CONTEXT } from '$lib/geo/torontoContext.js';
+	import { cityBounds, makeProjection, outlinePath, linesPath } from './placemap.js';
 
-	let { onplace, pools = [] } = $props();
+	let { onplace } = $props();
 
 	const BOX = { w: 320, h: 210 };
 	const bounds = cityBounds(TORONTO_OUTLINE);
 	const projection = makeProjection(bounds, BOX.w, BOX.h);
 	const path = outlinePath(TORONTO_OUTLINE, projection);
 
-	// The pools, as dots. A bare silhouette is genuinely hard to place
-	// yourself on — few people can point at their own neighbourhood on an
-	// unlabelled outline — and these are the one set of landmarks the page
-	// already has. They also quietly preview the answer: the cluster you are
-	// standing nearest is the cluster you'll be offered from.
-	const dots = $derived(
-		pools
-			.filter((p) => Number.isFinite(p.lat) && Number.isFinite(p.lng))
-			.map((p) => projection.toXY(p.lng, p.lat))
-	);
+	// What you actually navigate by. A bare silhouette is close to unusable as
+	// an input device — almost nobody can point at their own neighbourhood on
+	// one — so the map carries the water, the through-routes and the subway,
+	// unlabelled and in three receding tones. (An earlier version marked the
+	// pools instead, which raised the wrong question: a reader has no idea why
+	// those particular dots are there, and they answer "where are the pools",
+	// not "where am I".)
+	const context = {
+		water: linesPath(TORONTO_CONTEXT.water, projection),
+		streets: linesPath(TORONTO_CONTEXT.streets, projection),
+		subway: linesPath(TORONTO_CONTEXT.subway, projection)
+	};
 
 	// Starts in the middle of the city rather than nowhere, so the keyboard
 	// route has something to move and the crosshair explains itself.
@@ -104,18 +107,18 @@
 	<button
 		type="button"
 		class="map"
-		aria-label="Map of Toronto with the city's pools marked. Tap to place yourself, or use the arrow keys to move the marker and Enter to confirm."
+		aria-label="Map of Toronto showing the lake, rivers, main roads and subway lines. Tap to place yourself, or use the arrow keys to move the marker and Enter to confirm."
 		onpointerdown={fromPointer}
 		onkeydown={onKeydown}
 	>
 		<svg viewBox="0 0 {BOX.w} {BOX.h}" class="canvas" aria-hidden="true">
-		<path class="city" d={path} />
-		{#each dots as d, i (i)}
-			<circle class="pool" cx={d.x} cy={d.y} r="1.6" />
-		{/each}
-		<g class="mark" class:on={placed} transform="translate({mark.x},{mark.y})">
-			<circle class="halo" r="11" />
-			<circle class="dot" r="4" />
+			<path class="city" d={path} />
+			<path class="streets" d={context.streets} />
+			<path class="water" d={context.water} />
+			<path class="subway" d={context.subway} />
+			<g class="mark" class:on={placed} transform="translate({mark.x},{mark.y})">
+				<circle class="halo" r="11" />
+				<circle class="dot" r="4" />
 			</g>
 		</svg>
 	</button>
@@ -167,13 +170,28 @@
 		outline: 3px solid #0b66e4;
 		outline-offset: 2px;
 	}
+	/* Three tones under the marker, each quieter than the data on top of it.
+	   None is labelled: you are meant to recognise the shape, not read it. */
 	.city {
-		fill: #d7dee6;
-		stroke: #b9c4d0;
+		fill: #f0f2f4;
+		stroke: #dfe3e8;
 		stroke-width: 0.6;
 	}
-	.pool {
-		fill: #7f92a6;
+	.streets {
+		fill: none;
+		stroke: #dce0e5;
+		stroke-width: 0.5;
+	}
+	.water {
+		fill: none;
+		stroke: #c8d4dd;
+		stroke-width: 0.7;
+	}
+	.subway {
+		fill: none;
+		stroke: #c3c8ce;
+		stroke-width: 1.1;
+		stroke-linecap: round;
 	}
 	.mark .halo {
 		fill: rgb(11 102 228 / 0.18);

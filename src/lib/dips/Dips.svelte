@@ -14,7 +14,6 @@
 	import { MODES, modeRule } from '$lib/appeal.js';
 	import { dayLabel } from '$lib/labels.js';
 	import DayPlanner from './DayPlanner.svelte';
-	import PlaceMap from './PlaceMap.svelte';
 	import {
 		dipDurationMin,
 		swimKindParam,
@@ -250,18 +249,14 @@
 <main>
 	<header>
 		<h1>Swimmm</h1>
-		<p class="tagline">
-			A few dips you could take — adult {SWIM_KIND_NOUNS[kind]} at City of Toronto pools
-		</p>
+		<div class="kinds" role="group" aria-label="Swim type">
+			{#each SWIM_KINDS as k (k)}
+				<button class:active={kind === k} aria-pressed={kind === k} onclick={() => selectKind(k)}>
+					{SWIM_KIND_LABELS[k]}
+				</button>
+			{/each}
+		</div>
 	</header>
-
-	<div class="kinds" role="group" aria-label="Swim type">
-		{#each SWIM_KINDS as k (k)}
-			<button class:active={kind === k} aria-pressed={kind === k} onclick={() => selectKind(k)}>
-				{SWIM_KIND_LABELS[k]}
-			</button>
-		{/each}
-	</div>
 
 	{#if framed}
 		<p class="note">
@@ -277,7 +272,12 @@
 	{/if}
 
 	{#if needsPlace}
-		<PlaceMap onplace={setPlace} pools={data.schedule.locations ?? []} />
+		<!-- Loaded only when it's needed. The map carries the city's water,
+		     through-routes and subway lines — geography most readers never see,
+		     because most readers let the browser answer. -->
+		{#await import('./PlaceMap.svelte') then { default: PlaceMap }}
+			<PlaceMap onplace={setPlace} />
+		{/await}
 	{:else if !offer}
 		<p class="status">Finding you a dip…</p>
 	{:else if offer.length === 0}
@@ -297,7 +297,7 @@
 			<!-- Named, because it isn't always today: at eleven at night, or on a
 			     holiday Monday with every pool shut, the planner has moved on to
 			     the next day that has water in it. -->
-			{plan.isToday ? 'for the rest of today' : whichDay}
+			{plan.isToday ? 'left today' : whichDay} · adult {SWIM_KIND_NOUNS[kind]}
 		</p>
 		{#if degraded}
 			<p class="note">
@@ -335,34 +335,74 @@
 </main>
 
 <style>
+	/* Grayscale with a single accent, spent only on "now" — as the README has
+	   always said the site should be, and as v3 had drifted away from. */
+	:global(html),
+	:global(body) {
+		height: 100%;
+	}
 	:global(body) {
 		margin: 0;
-		background: #f4f4f4;
-		color: #1a1a1a;
+		background: #fff;
+		color: #1a1d21;
 		font-family: system-ui, -apple-system, sans-serif;
+		-webkit-font-smoothing: antialiased;
 	}
+	/* One screen: the header and notes take what they need, the planner takes
+	   the rest. Nothing below the fold, because the shape of the day is the
+	   thing being read and you cannot see a shape a screenful at a time. */
 	main {
+		box-sizing: border-box;
 		max-width: 30rem;
+		min-height: 100svh;
 		margin: 0 auto;
-		padding: 1rem 1rem 2rem;
+		padding: 0.9rem 1rem 1rem;
+		display: flex;
+		flex-direction: column;
+		gap: 0.4rem;
 	}
 	header {
-		margin-bottom: 0.75rem;
+		display: flex;
+		align-items: baseline;
+		justify-content: space-between;
+		gap: 1rem;
 	}
 	h1 {
-		font-size: 1.6rem;
+		font-size: 0.9375rem;
+		font-weight: 600;
+		letter-spacing: 0.01em;
 		margin: 0;
-		letter-spacing: 0.02em;
 	}
-	.tagline {
-		margin: 0.15rem 0 0;
-		color: #555;
-		font-size: 0.9rem;
+	/* A text switch, not a pill: the shadow, the track and the capsule were
+	   three pieces of ink for one bit of state. */
+	.kinds {
+		display: flex;
+		gap: 0.75rem;
+	}
+	.kinds button {
+		border: 0;
+		background: none;
+		padding: 0 0 1px;
+		font: inherit;
+		font-size: 0.8125rem;
+		color: #8a9097;
+		cursor: pointer;
+	}
+	.kinds button.active {
+		color: #1a1d21;
+		border-bottom: 1px solid #1a1d21;
+	}
+	.count {
+		margin: 0;
+		font-size: 0.75rem;
+		color: #7c838a;
+		font-variant-numeric: tabular-nums;
 	}
 	.status {
-		color: #555;
+		color: #5f666d;
+		font-size: 0.875rem;
 		padding: 2rem 0;
-		text-align: center;
+		max-width: 24rem;
 	}
 	.status a,
 	.note a {
@@ -377,47 +417,26 @@
 		text-decoration: underline;
 		cursor: pointer;
 	}
-	.kinds {
-		display: flex;
-		gap: 0.25rem;
-		margin: 0.85rem 0 0.25rem;
-		padding: 0.2rem;
-		background: #e7e7e7;
-		border-radius: 999px;
-	}
-	.kinds button {
-		flex: 1;
-		border: 0;
-		border-radius: 999px;
-		background: transparent;
-		padding: 0.5rem 0.9rem;
-		font-size: 0.95rem;
-		font-weight: 600;
-		color: #555;
-		cursor: pointer;
-	}
-	.kinds button.active {
-		background: #fff;
-		color: #0b66e4;
-		box-shadow: 0 1px 3px rgb(0 0 0 / 0.16);
-	}
-	.count {
-		font-size: 0.85rem;
-		color: #555;
-		margin: 0.75rem 0;
-	}
 	.note {
-		font-size: 0.8rem;
-		color: #777;
-		margin: 0.5rem 0 0.75rem;
+		font-size: 0.6875rem;
+		line-height: 1.45;
+		color: #8a9097;
+		margin: 0;
+		max-width: 26rem;
 	}
 	footer {
-		margin-top: 1.5rem;
-		font-size: 0.75rem;
-		color: #888;
-		text-align: center;
+		margin-top: auto;
+		padding-top: 0.6rem;
+		font-size: 0.6875rem;
+		color: #9aa0a6;
+		display: flex;
+		justify-content: space-between;
+		gap: 1rem;
+	}
+	footer p {
+		margin: 0;
 	}
 	footer a {
-		color: #0b66e4;
+		color: inherit;
 	}
 </style>

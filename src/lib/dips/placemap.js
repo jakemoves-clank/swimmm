@@ -88,3 +88,18 @@ export function outlinePath(outline, projection) {
 	}
 	return parts.join('');
 }
+
+// The context layers (water, through-routes, subway) as one path each. Open
+// polylines, not closed rings: a river drawn as an outline reads as a lake.
+export function linesPath(lines, projection) {
+	return lines
+		.map((line) =>
+			line
+				.map(([lng, lat], i) => {
+					const { x, y } = projection.toXY(lng, lat);
+					return `${i ? 'L' : 'M'}${x.toFixed(1)},${y.toFixed(1)}`;
+				})
+				.join('')
+		)
+		.join('');
+}

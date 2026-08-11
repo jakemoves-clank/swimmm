@@ -52,12 +52,6 @@ export function layoutDips(dips) {
 	return laid;
 }
 
-// How much empty axis the planner will draw before the first departure, to
-// show you where "now" sits relative to it. Beyond an hour it stops being
-// context and starts being scrolling: asked at 2 a.m. about a 2 p.m. swim,
-// an axis anchored on now would be twelve hours of blank page.
-const LEAD_IN_MIN = 60;
-
 /**
  * The stretch of day the planner draws, rounded out to whole hours so the
  * axis labels land on the hour.
@@ -65,13 +59,23 @@ const LEAD_IN_MIN = 60;
  * @param nowMin  minutes since midnight, or null when the planner is showing
  *                a day that isn't today and so has no "now" on it.
  */
+// At most this much empty axis before the first departure. Asked at 3 a.m.
+// about a 2 p.m. swim, an axis anchored on now would be eleven hours of blank
+// page — context past an hour is just scrolling.
+const LEAD_IN_MIN = 60;
+
 export function planSpan(dips, nowMin) {
 	if (!dips.length) {
 		const from = Math.floor((nowMin ?? 0) / 60) * 60;
 		return [from, from + 60];
 	}
-	const first = Math.min(...dips.map((d) => Math.min(d.leaveBy, d.start_min)));
-	const from = nowMin == null ? first : Math.max(first - LEAD_IN_MIN, Math.min(nowMin, first));
+	const first = Math.min(...dips.map((d) => Math.min(d.leaveBy ?? d.start_min, d.start_min)));
+	// Never before now: the part of the day you have already slept through is
+	// not an option, and on a screen that has to hold the whole offer at once
+	// it is the first ink worth erasing. (A dip whose departure has passed —
+	// you're close enough to a running session to still make it — therefore
+	// starts at now, and the card says "leave now".)
+	const from = nowMin == null ? first : Math.max(nowMin, first - LEAD_IN_MIN);
 	return [
 		Math.floor(from / 60) * 60,
 		Math.ceil(Math.max(...dips.map((d) => d.end_min)) / 60) * 60
