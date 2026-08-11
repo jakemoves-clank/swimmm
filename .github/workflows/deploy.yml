@@ -142,18 +142,24 @@ jobs:
           # An unset expression is silently empty, which is why the step below
           # checks the built output rather than trusting this to have landed.
           PUBLIC_MAPBOX_TOKEN: ${{ vars.PUBLIC_MAPBOX_TOKEN }}
+          # Outside root-src (and reused verbatim by the preview builds below)
+          # so root and every preview share one on-disk fetch of the city's
+          # raw feeds without sharing anything code-derived. See the "Build
+          # previews" step for why that distinction matters.
+          SWIMMM_CACHE_DIR: ${{ github.workspace }}/.city-cache
         run: |
           npm run build
-          cp .city-cache/stamp.txt build/stamp.txt
+          cp "$SWIMMM_CACHE_DIR/stamp.txt" build/stamp.txt
 
-      # Without a token the site still builds and lists every swim — it just
-      # can't show walk/bike/transit times or a top pick. That is a legitimate
+      # Without a token the site still builds and still offers dips — it just
+      # measures them as straight-line distances and says so, rather than
+      # routing a trip and naming a departure time. That is a legitimate
       # deploy, so warn rather than fail; the point is that it stops being
       # invisible. Only ever reports whether a token arrived, never its value.
       - name: Report whether travel times are enabled
         run: |
           if grep -q 'mapboxToken:null' root-src/build/index.html; then
-            echo "::warning::No PUBLIC_MAPBOX_TOKEN reached the build — deploying without walk/bike/transit times. Set it under Settings → Secrets and variables → Actions → Variables as a repository variable (an environment-scoped one will not reach this job)."
+            echo "::warning::No PUBLIC_MAPBOX_TOKEN reached the build — deploying with straight-line distances instead of routed travel times. Set it under Settings → Secrets and variables → Actions → Variables as a repository variable (an environment-scoped one will not reach this job)."
             echo 'Travel times: **off** — no `PUBLIC_MAPBOX_TOKEN` reached the build.' >> "$GITHUB_STEP_SUMMARY"
           else
             echo 'Travel times: **on**.' >> "$GITHUB_STEP_SUMMARY"
@@ -185,20 +191,23 @@ jobs:
       # nowhere else. A PR cannot reach the root that way, which matters
       # because this step runs that PR's build.
       #
-      # Every preview reads the root build's already-downloaded city data via
-      # SWIMMM_DATA_FILE. One download rather than one per PR (the city's
-      # politeness contract — see src/lib/server/cityData.js), and, more
-      # usefully, a preview then differs from production only by the PR's
-      # code and never by data that moved between builds.
+      # Every preview shares the root build's already-downloaded city data via
+      # SWIMMM_CACHE_DIR, pointed at the same directory the root build step
+      # populated. One download rather than one per PR (the city's politeness
+      # contract — see src/lib/server/cityData.js). That directory holds the
+      # *raw* CKAN feeds, not a finished schedule, so each preview still runs
+      # its own transform.js/cityData.js over them — a PR that changes the
+      # data pipeline sees that change in its own preview, not just main's,
+      # which a shared *transformed* payload would have hidden.
       - name: Build previews
         if: needs.gate.outputs.previews != '[]'
         env:
           PREVIEWS: ${{ needs.gate.outputs.previews }}
           REPO_NAME: ${{ github.event.repository.name }}
           PUBLIC_MAPBOX_TOKEN: ${{ vars.PUBLIC_MAPBOX_TOKEN }}
+          SWIMMM_CACHE_DIR: ${{ github.workspace }}/.city-cache
         run: |
           set -euo pipefail
-          DATA="$PWD/root-src/.city-cache/schedule.json"
           for N in $(echo "$PREVIEWS" | jq -r '.[].number'); do
             echo "::group::preview for PR #$N"
             rm -rf pr-src && mkdir pr-src
@@ -212,7 +221,7 @@ jobs:
             echo "building $(git -C pr-src rev-parse HEAD)"
             ( cd pr-src \
               && npm ci --ignore-scripts --silent \
-              && BASE_PATH="/$REPO_NAME/pr-$N" SWIMMM_DATA_FILE="$DATA" npm run build )
+              && BASE_PATH="/$REPO_NAME/pr-$N" npm run build )
             mkdir -p "site/pr-$N"
             cp -r pr-src/build/. "site/pr-$N/"
             echo "preview: /$REPO_NAME/pr-$N/" >> "$GITHUB_STEP_SUMMARY"

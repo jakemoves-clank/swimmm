@@ -2,9 +2,18 @@
 // the user's location goes to Mapbox only — never to the Swimmm server.
 // https://docs.mapbox.com/api/navigation/matrix/
 
-// Matrix API allows 25 coordinates per request for walking/cycling profiles:
-// 1 origin + 24 destinations.
+// Matrix API allows 25 coordinates per request for the walking, cycling and
+// driving profiles: 1 origin + 24 destinations. (driving-traffic allows only
+// 10, which is why we use plain driving: a dip is planned around a session
+// that starts later anyway, so live congestion would be false precision.)
 const MAX_DESTINATIONS = 24;
+
+// Our mode names → Mapbox's profile names.
+export const PROFILES = { walk: 'walking', bike: 'cycling', drive: 'driving' };
+
+// What v1 has always asked for. v3 adds 'drive' (see appeal.js MODES) — each
+// mode is another round trip, so callers name the ones they'll actually use.
+const DEFAULT_MODES = ['walk', 'bike'];
 
 export function chunkPools(pools, size = MAX_DESTINATIONS) {
 	const chunks = [];
@@ -44,13 +53,32 @@ async function profileDurations(profile, origin, pools, token, fetchImpl) {
 	return out;
 }
 
+/**
+ * Travel times for the named modes.
+ *
+ * Returns Map<pool id, { [mode]: minutes|null }> — one key per requested
+ * mode, so a caller can hand the value straight to appeal.js pickMode.
+ */
+export async function fetchTravelTimesFor(
+	origin,
+	pools,
+	token,
+	{ modes = DEFAULT_MODES, fetchImpl = fetch } = {}
+) {
+	const results = await Promise.all(
+		modes.map((mode) => profileDurations(PROFILES[mode], origin, pools, token, fetchImpl))
+	);
+	return new Map(
+		pools.map((p) => [
+			p.id,
+			Object.fromEntries(modes.map((mode, i) => [mode, results[i].get(p.id) ?? null]))
+		])
+	);
+}
+
 // Returns Map<pool id, { walk: minutes|null, bike: minutes|null }>.
 export async function fetchTravelTimes(origin, pools, token, fetchImpl = fetch) {
-	const [walk, bike] = await Promise.all([
-		profileDurations('walking', origin, pools, token, fetchImpl),
-		profileDurations('cycling', origin, pools, token, fetchImpl)
-	]);
-	return new Map(pools.map((p) => [p.id, { walk: walk.get(p.id) ?? null, bike: bike.get(p.id) ?? null }]));
+	return fetchTravelTimesFor(origin, pools, token, { modes: DEFAULT_MODES, fetchImpl });
 }
 
 // A session is "one you can actually get to" when the faster mode gets you

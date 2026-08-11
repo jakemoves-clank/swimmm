@@ -12,7 +12,7 @@ import { EnvHttpProxyAgent, fetch as undiciFetch } from 'undici';
 import { buildSchedule } from './transform.js';
 
 const CKAN = 'https://ckan0.cf.opendata.inter.prod-toronto.ca';
-const URLS = {
+export const URLS = {
 	programsMeta: `${CKAN}/api/3/action/package_show?id=registered-programs-and-drop-in-courses-offering`,
 	facilitiesMeta: `${CKAN}/api/3/action/package_show?id=parks-and-recreation-facilities`,
 	dropin: `${CKAN}/dataset/1a5be46a-4039-48cd-a2d2-8e702abf9516/resource/067b41e7-ac8a-4d3f-ad08-089f8cd70316/download/drop-in.json`,
@@ -48,12 +48,19 @@ async function getJson(fetchImpl, url) {
 	return readJsonCapped(res, url);
 }
 
-export async function loadSchedule({ cacheDir = '.city-cache', fetchImpl = defaultFetch } = {}) {
-	if (process.env.SWIMMM_DATA_FILE) {
-		return JSON.parse(readFileSync(process.env.SWIMMM_DATA_FILE, 'utf8'));
-	}
-
-	const cacheFile = join(cacheDir, 'schedule.json');
+// Fetches the five CKAN payloads a schedule is built from, or reuses them
+// from disk if they're under CACHE_MAX_AGE_MS old.
+//
+// The cache holds these *raw* responses, not buildSchedule's output. It used
+// to hold the transformed schedule, which meant a cache hit returned exactly
+// what a previous run's transform.js had produced and skipped calling it
+// again — so editing transform.js had no effect on a local build until the
+// 20 h cache happened to expire, and the build succeeded while quietly
+// serving stale output. Caching the inputs instead means buildSchedule runs
+// on every call, cache hit or not, so its output always matches the code
+// that's actually on disk.
+async function loadRaw(cacheDir, fetchImpl) {
+	const cacheFile = join(cacheDir, 'raw.json');
 	try {
 		if (Date.now() - statSync(cacheFile).mtimeMs < CACHE_MAX_AGE_MS) {
 			return JSON.parse(readFileSync(cacheFile, 'utf8'));
@@ -69,21 +76,40 @@ export async function loadSchedule({ cacheDir = '.city-cache', fetchImpl = defau
 		getJson(fetchImpl, URLS.locations),
 		getJson(fetchImpl, URLS.geojson)
 	]);
+	const raw = { programsMeta, facilitiesMeta, dropin, locations, geojson };
 
-	const schedule = {
+	mkdirSync(cacheDir, { recursive: true });
+	writeFileSync(cacheFile, JSON.stringify(raw));
+	// One-line stamp the deploy workflow publishes and compares against CKAN
+	// to decide whether a scheduled rebuild is needed at all.
+	writeFileSync(
+		join(cacheDir, 'stamp.txt'),
+		`${String(programsMeta.result.last_refreshed)}|${String(facilitiesMeta.result.last_refreshed)}\n`
+	);
+	return raw;
+}
+
+export async function loadSchedule({
+	// A shared, absolute cacheDir lets several builds in the same deploy run
+	// (the root build plus each PR preview — see deploy.yml) reuse one
+	// on-disk fetch of the city's raw data while each still runs its own
+	// transform.js/buildSchedule over it.
+	cacheDir = process.env.SWIMMM_CACHE_DIR || '.city-cache',
+	fetchImpl = defaultFetch
+} = {}) {
+	if (process.env.SWIMMM_DATA_FILE) {
+		return JSON.parse(readFileSync(process.env.SWIMMM_DATA_FILE, 'utf8'));
+	}
+
+	const { programsMeta, facilitiesMeta, dropin, locations, geojson } = await loadRaw(
+		cacheDir,
+		fetchImpl
+	);
+
+	return {
 		programs_last_refreshed: String(programsMeta.result.last_refreshed),
 		facilities_last_refreshed: String(facilitiesMeta.result.last_refreshed),
 		generated_at: new Date().toISOString(),
 		...buildSchedule(dropin, locations, geojson)
 	};
-
-	mkdirSync(cacheDir, { recursive: true });
-	writeFileSync(cacheFile, JSON.stringify(schedule));
-	// One-line stamp the deploy workflow publishes and compares against CKAN
-	// to decide whether a scheduled rebuild is needed at all.
-	writeFileSync(
-		join(cacheDir, 'stamp.txt'),
-		`${schedule.programs_last_refreshed}|${schedule.facilities_last_refreshed}\n`
-	);
-	return schedule;
 }

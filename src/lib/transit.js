@@ -14,13 +14,45 @@ export function transitPlanUrl(origin, pool, timeIso) {
 	return `${TRANSIT_PROVIDER.PLAN_URL}?${q}`;
 }
 
+// Which face of transit a trip is. The appeal algorithm knows one mode called
+// "transit", which is right for scoring — a bus and a subway both get you
+// there — but wrong for a reader, to whom a streetcar and a subway are
+// different plans. MOTIS names every leg, so the information is already in
+// the answer and costs nothing to keep. Anything not listed stays unnamed
+// rather than being forced into the nearest box; the planner has a generic
+// icon for exactly that case.
+const TRANSIT_FACES = {
+	BUS: 'bus',
+	SUBWAY: 'subway',
+	METRO: 'subway',
+	TRAM: 'streetcar',
+	STREETCAR: 'streetcar'
+};
+
+// The longest leg you ride. Walking legs are how you reach the stop, not how
+// you make the trip, so they never name it.
+function ridingMode(itinerary) {
+	let best = null;
+	for (const leg of itinerary?.legs ?? []) {
+		const face = TRANSIT_FACES[String(leg.mode).toUpperCase()];
+		if (!face) continue;
+		const seconds = Number(leg.duration) || 0;
+		if (!best || seconds > best.seconds) best = { face, seconds };
+	}
+	return best?.face ?? null;
+}
+
 // Best itinerary = fastest among those within the connection limit.
 // MOTIS reports duration in seconds and transfers per itinerary.
 export function parseTransitItineraries(body, maxConnections) {
 	const ok = (body.itineraries || []).filter((it) => it.transfers <= maxConnections);
 	if (!ok.length) return null;
 	const best = ok.reduce((a, b) => (b.duration < a.duration ? b : a));
-	return { minutes: Math.round(best.duration / 60), connections: best.transfers };
+	return {
+		minutes: Math.round(best.duration / 60),
+		connections: best.transfers,
+		via: ridingMode(best)
+	};
 }
 
 function haversineKm(a, b) {

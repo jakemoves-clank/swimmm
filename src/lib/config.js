@@ -13,6 +13,41 @@ export const DEFAULT_MAX_TRAVEL_MIN = 60;
 export const DEFAULT_MIN_SWIM_MIN = 30;
 export const LOCATION_GRID_DEG = 0.0005;
 
+// A dip is an appointment, not a listing: a trip to a pool plus a booked
+// window in the water. How long that window is, is the user's call.
+//
+// DIP_DURATION_OPTIONS: the lengths a dip can be offered at, longest last.
+// DEFAULT_DIP_DURATION_MIN: what we offer until someone says otherwise
+// (`?dip=30`). A dip takes this length whenever the session it sits in has
+// room for it, and shortens to the next option down when it doesn't — a
+// shortened dip is still worth offering, but it scores worse (see appeal).
+// DIP_START_STEP_MIN: offered starts are rounded up to this many minutes.
+// "2:15 to 3:00" reads like something you could put in a calendar; "2:13 to
+// 2:58" reads like arithmetic. Rounding up never invents time you don't
+// have — it only ever delays getting in.
+export const DIP_DURATION_OPTIONS = [30, 45, 60];
+export const DEFAULT_DIP_DURATION_MIN = 45;
+export const DIP_START_STEP_MIN = 5;
+
+// How times are said, as opposed to how they are worked out. Every minute the
+// page prints — a departure, a trip length — is rounded to this step, so the
+// offer reads like an appointment ("leave 1:50, 15-min ride") rather than a
+// measurement ("leave 1:48, 12-min ride"). It is a display rule and nothing
+// more: the arithmetic behind a dip keeps its real minutes.
+//
+// Up, because a rounded-up trip is one you can keep — except when the time is
+// a single minute over the step, where up would spend four of the five
+// minutes the reader has for the sake of one, and a minute is well inside the
+// noise of any routed estimate. So 12:02 and 12:03 are both said as 12:05,
+// and 12:01 is said as 12:00.
+export const DISPLAY_STEP_MIN = 5;
+
+export function roundForDisplay(min) {
+	const over = ((min % DISPLAY_STEP_MIN) + DISPLAY_STEP_MIN) % DISPLAY_STEP_MIN;
+	if (over === 0) return min;
+	return over === 1 ? min - 1 : min + (DISPLAY_STEP_MIN - over);
+}
+
 // The two kinds of swim the city runs that an adult can just turn up to:
 // lane swim (lengths, in a lane) and leisure swim (open/unstructured). Also
 // the source of truth for `swimKind` in server/transform.js, so the payload
@@ -49,6 +84,75 @@ export const TRANSIT_PROVIDER = {
 	LOOKUP_LIMIT: 8
 };
 
+// What makes a dip appealing. The algorithm lives in src/lib/appeal.js; this
+// is every number it uses, so tuning the concierge's taste never means
+// editing the code that applies it.
+//
+// MODES is both the admission test and the preference order: a dip is
+// appealing when its mode gets you there inside that mode's MAX_MIN, and
+// walking beats cycling beats transit beats driving.
+//
+// BASE is spaced 40 apart to make that ordering a guarantee rather than a
+// tendency. The other terms can swing a dip by at most 33 — the full
+// PROXIMITY_WEIGHT (15) plus the worst possible shortfall (asking for 60 and
+// being handed 30, at 0.6 a minute, is 18) — so the sweetest drive in
+// Toronto still loses to the worst qualifying transit trip. Anything added
+// below has to fit in the remaining headroom, or the spacing goes up too.
+export const APPEAL = {
+	MODES: [
+		{ mode: 'walk', MAX_MIN: 15, BASE: 160 },
+		{ mode: 'bike', MAX_MIN: 20, BASE: 120 },
+		{ mode: 'transit', MAX_MIN: 20, BASE: 80, MAX_CONNECTIONS: 1 },
+		{ mode: 'drive', MAX_MIN: 20, BASE: 40 }
+	],
+	// A trip at the very edge of its threshold scores 0 here; an on-your-
+	// doorstep one scores the full PROXIMITY_WEIGHT.
+	PROXIMITY_WEIGHT: 15,
+	// Per minute short of the dip length you asked for. A 45 cut to 30 costs
+	// 9 points — enough to lose to a closer pool of the same mode, never
+	// enough to lose to a slower mode.
+	SHORTFALL_PENALTY_PER_MIN: 0.6,
+
+	// When nothing could be routed — no Mapbox token, Mapbox unreachable, or
+	// one pool it couldn't find a road to — we fall back to the one number we
+	// can work out on the device: the straight line. We still refuse to turn
+	// that into a departure time (an estimated "leave at 1:40" is how you
+	// miss a swim), so a distance-only dip simply has no trip on it and says
+	// how far away the pool is instead.
+	//
+	// BASE is 0 against the routed modes' 40–160, which puts every
+	// distance-only dip below every routed one. That is the intended reading:
+	// prefer what we can vouch for. MAX_KM is what we'll offer at all without
+	// knowing how you'd travel — roughly a comfortable ride, and beyond a
+	// walk — since the mode thresholds can't be applied to a line on a map.
+	DISTANCE: { MAX_KM: 5, BASE: 0, PROXIMITY_WEIGHT: 15 }
+};
+
+// Turning a ranked list of dips into the handful actually offered.
+//
+// COUNT: "a handful". Enough that the day has shape, few enough to read.
+// MAX_OVERLAP_MIN: two dips clash when their windows in the water overlap by
+// more than this. Offering four dips that all run 2:00–2:45 answers one
+// question four times; spreading them lets the reader answer "I'm free
+// between 2 and 4 — what are my options?". A clash only pushes a dip down
+// the list, never off it: if the day genuinely has nothing else, an
+// overlapping dip beats an empty afternoon, and the UI draws it.
+// MAX_PER_POOL: the nearest pool often runs four sessions in a day, and a
+// concierge that answers "Regent Park, Regent Park, Regent Park" is a
+// directory with extra steps.
+// MAX_CONCURRENT: how many dips may be in the water at the same moment. The
+// clash rule above only pushes a dip down the ranking, so on a busy evening
+// the fill pass used to hand back five swims that all start at five past —
+// one question answered five times, in a column split five ways, with the
+// pool names wrapping to three lines and the trip cut off the bottom. Two is
+// a choice; more is a crowd, and the page cannot draw it legibly.
+export const DIP_SELECTION = {
+	COUNT: 5,
+	MAX_OVERLAP_MIN: 10,
+	MAX_PER_POOL: 2,
+	MAX_CONCURRENT: 2
+};
+
 // "Top pick" tiers, tried in order. A session qualifies for a tier when it
 // starts within WINDOW_MIN of now, the tier's mode gets you there within its
 // max, and you'd still get DEFAULT_MIN_SWIM_MIN in the water. If no tier
@@ -77,6 +181,15 @@ export function maxTravelMin(searchParams) {
 // ?swim=20 → require at least 20 minutes in the pool
 export function minSwimMin(searchParams) {
 	return positive(searchParams, 'swim', DEFAULT_MIN_SWIM_MIN);
+}
+
+// ?dip=30 → offer 30-minute dips. Unlike the other knobs this one is a
+// choice from a fixed set rather than any positive number: the whole point of
+// DIP_DURATION_OPTIONS is that the UI offers three lengths, so an arbitrary
+// 37 would have no control to show it in.
+export function dipDurationMin(searchParams) {
+	const v = Number(searchParams?.get?.('dip'));
+	return DIP_DURATION_OPTIONS.includes(v) ? v : DEFAULT_DIP_DURATION_MIN;
 }
 
 // ?kind=leisure → open on the leisure tab. Anything else falls back to lane
