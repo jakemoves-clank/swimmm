@@ -319,8 +319,6 @@
 									>
 								{:else}
 									{reachPhrase(dip)}
-								{/if}{#if dip.location.approx}
-									<span class="approx" title="The city publishes no location for this pool, so the trip is measured to the complex it sits in">≈</span>
 								{/if}
 							</p>
 							{#if dip.session.variant}
@@ -651,9 +649,6 @@
 	.variant {
 		font-size: 0.6875rem;
 		color: var(--gray-500);
-	}
-	.approx {
-		color: var(--gray-300);
 	}
 	/* Which of the two levels a block shows, decided by the block: it is written
 	   both ways and keeps the one it has the height for. A container query's

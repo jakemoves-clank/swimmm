@@ -91,10 +91,19 @@ Donald D. Summerville Olympic Pools are in the city's location list but
 absent from its facilities geo data under any name or address, while
 L'Amoreaux Sports Complex and Woodbine Beach Park, which contain them, are
 mapped. A borrowed point is the complex rather than the pool door, so it is
-flagged `approx` all the way through to the card, which says "approx.
-location" — being a few hundred metres out is worth far more to a reader
-than not being offered the pool at all, but only if nobody is misled about
-which it is. With that step every pool the city lists is now placed.
+flagged `approx` — being a few hundred metres out is worth far more to a
+reader than not being offered the pool at all. With that step every pool the
+city lists is now placed.
+
+The flag no longer reaches the page. The planner used to append a `≈` to
+those dips' trip lines, explained by nothing but a `title` tooltip, which on
+a phone is no explanation at all: an unlabelled glyph, set lighter than any
+other mark on the page, sitting after "15-min walk" as though the *duration*
+were the approximate part. A few hundred metres is comfortably inside the
+noise of a travel time already rounded to five minutes, so the mark was
+spending a reader's attention on an error smaller than the one it stood
+beside. The flag stays in the payload as provenance — it is what stops a
+borrowed point being recorded as an exact one — and nothing renders it.
 
 Swimmm lists two kinds of drop-in swim, switchable with the Lane/Leisure
 toggle (`?kind=leisure` deep-links to it). Both are baked into the same
