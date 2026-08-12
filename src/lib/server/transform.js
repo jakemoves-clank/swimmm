@@ -106,6 +106,41 @@ export function buildSchedule(dropinRows, locationRows, geojson) {
 	return { locations, sessions };
 }
 
+// How far ahead the baked schedule reaches. planDay looks a week ahead at
+// most, so this is four times what the page can use — the slack is for a
+// build gone stale, since deploys are gated on the city republishing and a
+// quiet fortnight leaves the last build serving. Past the horizon the site
+// would be answering with a schedule nobody should trust anyway.
+export const SCHEDULE_HORIZON_DAYS = 28;
+
+function addDays(date, days) {
+	return new Date(Date.parse(`${date}T00:00:00Z`) + days * 86_400_000).toISOString().slice(0, 10);
+}
+
+/**
+ * The window of the schedule worth shipping.
+ *
+ * The city publishes about six weeks of swims and all of it used to be baked
+ * into the page — a megabyte of JSON inside the HTML, parsed on a phone
+ * before anything can be drawn, of which a third was days that had already
+ * happened or days the planner will never look at. A build can only be read
+ * *after* it was made, so a day already behind it is a day nobody can ask
+ * about.
+ *
+ * Pure, and separate from buildSchedule, because it is a decision about what
+ * the client needs rather than a fact about the city's data.
+ */
+export function trimSchedule(schedule, { today, days = SCHEDULE_HORIZON_DAYS }) {
+	const until = addDays(today, days);
+	const sessions = (schedule.sessions ?? []).filter((s) => s.date >= today && s.date <= until);
+	const used = new Set(sessions.map((s) => s.location_id));
+	return {
+		...schedule,
+		locations: (schedule.locations ?? []).filter((l) => used.has(l.id)),
+		sessions
+	};
+}
+
 export function buildLocations(locationsJson, geojson) {
 	const byId = new Map();
 	const byAddress = new Map();

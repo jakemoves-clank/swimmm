@@ -90,6 +90,25 @@ describe('fetchTravelTimesFor', () => {
 		expect(t.get(1)).toEqual({ walk: 10, drive: 10 });
 	});
 
+	// 104 pools is five chunks of 24, and they used to go out one after
+	// another — five round trips deep, per mode, with the page showing
+	// nothing until the last one landed. They are independent requests to the
+	// same endpoint; there is no reason for the second to wait on the first.
+	it('asks for every chunk at once rather than a round trip at a time', async () => {
+		const pools = Array.from({ length: 50 }, (_, i) => pool(i, 43.7, -79.5));
+		let inflight = 0;
+		let peak = 0;
+		const fetchImpl = async () => {
+			inflight++;
+			peak = Math.max(peak, inflight);
+			await Promise.resolve();
+			inflight--;
+			return { ok: true, json: async () => ({ code: 'Ok', durations: [[0, 600]] }) };
+		};
+		await fetchTravelTimesFor(origin, pools, 'pk.test', { modes: ['walk'], fetchImpl });
+		expect(peak).toBe(3);
+	});
+
 	it('leaves the two-mode default alone, so /v1 makes no extra request', async () => {
 		const { profiles, fetchImpl } = spyFetch();
 		const t = await fetchTravelTimes(origin, [pool(1, 43.7, -79.5)], 'pk.test', fetchImpl);

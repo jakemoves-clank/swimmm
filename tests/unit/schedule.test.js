@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildSchedule } from '../../src/lib/server/transform.js';
+import { buildSchedule, trimSchedule, SCHEDULE_HORIZON_DAYS } from '../../src/lib/server/transform.js';
 
 // Raw shapes as the city publishes them.
 const dropin = [
@@ -89,5 +89,54 @@ describe('buildSchedule', () => {
 		const { sessions, locations: locs } = buildSchedule(preschoolOnly, locations, geojson);
 		expect(sessions).toEqual([]);
 		expect(locs).toEqual([]);
+	});
+});
+
+// The city publishes about six weeks of swims and the whole lot used to be
+// baked into the page: a megabyte of JSON in the HTML, a third of it days
+// that had already happened or that the planner will never look at. It is
+// parsed before anything can be drawn, on a phone, every visit.
+describe('trimSchedule', () => {
+	const session = (date) => ({ location_id: 1, course_id: 10, kind: 'lane', title: 'Lane Swim', date, start_min: 540, end_min: 600 });
+	const schedule = {
+		locations: [
+			{ id: 1, name: 'Pool 1', lat: 43.7, lng: -79.4 },
+			{ id: 2, name: 'Pool 2', lat: 43.7, lng: -79.4 }
+		],
+		sessions: [
+			{ ...session('2026-08-09'), location_id: 2 }, // gone
+			session('2026-08-11'), // yesterday, gone
+			session('2026-08-12'), // today
+			session('2026-08-26'),
+			session('2026-10-01') // past the horizon
+		]
+	};
+	const trimmed = trimSchedule(schedule, { today: '2026-08-12' });
+
+	// A build can only ever be read *after* it was made, so a day already
+	// behind the build is a day nobody will ever ask about.
+	it('drops the days that had already happened when the site was built', () => {
+		expect(trimmed.sessions.map((s) => s.date)).not.toContain('2026-08-11');
+		expect(trimmed.sessions.map((s) => s.date)).toContain('2026-08-12');
+	});
+
+	// planDay looks a week ahead at most. The horizon is several times that,
+	// so a build left stale by a quiet week at the city still answers a full
+	// week — but it is not the city's whole publishing window.
+	it('keeps well past what the planner can reach, and no further', () => {
+		expect(SCHEDULE_HORIZON_DAYS).toBeGreaterThanOrEqual(21);
+		expect(trimmed.sessions.map((s) => s.date)).toContain('2026-08-26');
+		expect(trimmed.sessions.map((s) => s.date)).not.toContain('2026-10-01');
+	});
+
+	// A pool whose only swims were yesterday is a pool the page can say
+	// nothing about — including in the count of ones the city never placed.
+	it('drops a pool left with no sessions at all', () => {
+		expect(trimmed.locations.map((l) => l.id)).toEqual([1]);
+	});
+
+	it('leaves a schedule inside the window exactly as it found it', () => {
+		const inside = { locations: schedule.locations, sessions: [session('2026-08-12')] };
+		expect(trimSchedule(inside, { today: '2026-08-12' }).sessions).toEqual(inside.sessions);
 	});
 });

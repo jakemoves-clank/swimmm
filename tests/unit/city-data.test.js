@@ -7,7 +7,12 @@ import { join } from 'node:path';
 // behaviour in isolation from transform.js's actual logic (that's
 // transform.test.js's job) — and so a test can swap what it returns between
 // two loadSchedule() calls to stand in for "transform.js changed on disk".
-vi.mock('../../src/lib/server/transform.js', () => ({ buildSchedule: vi.fn() }));
+// trimSchedule is a pure window over the result (tested in schedule.test.js);
+// here it passes through so these tests stay about caching and fetching.
+vi.mock('../../src/lib/server/transform.js', () => ({
+	buildSchedule: vi.fn(),
+	trimSchedule: (schedule) => schedule
+}));
 
 import { readJsonCapped, loadSchedule, URLS } from '../../src/lib/server/cityData.js';
 import { buildSchedule } from '../../src/lib/server/transform.js';
