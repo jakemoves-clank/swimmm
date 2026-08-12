@@ -91,10 +91,19 @@ Donald D. Summerville Olympic Pools are in the city's location list but
 absent from its facilities geo data under any name or address, while
 L'Amoreaux Sports Complex and Woodbine Beach Park, which contain them, are
 mapped. A borrowed point is the complex rather than the pool door, so it is
-flagged `approx` all the way through to the card, which says "approx.
-location" — being a few hundred metres out is worth far more to a reader
-than not being offered the pool at all, but only if nobody is misled about
-which it is. With that step every pool the city lists is now placed.
+flagged `approx` — being a few hundred metres out is worth far more to a
+reader than not being offered the pool at all. With that step every pool the
+city lists is now placed.
+
+The flag no longer reaches the page. The planner used to append a `≈` to
+those dips' trip lines, explained by nothing but a `title` tooltip, which on
+a phone is no explanation at all: an unlabelled glyph, set lighter than any
+other mark on the page, sitting after "15-min walk" as though the *duration*
+were the approximate part. A few hundred metres is comfortably inside the
+noise of a travel time already rounded to five minutes, so the mark was
+spending a reader's attention on an error smaller than the one it stood
+beside. The flag stays in the payload as provenance — it is what stops a
+borrowed point being recorded as an exact one — and nothing renders it.
 
 Swimmm lists two kinds of drop-in swim, switchable with the Lane/Leisure
 toggle (`?kind=leisure` deep-links to it). Both are baked into the same
@@ -162,8 +171,12 @@ A travel *time* is never estimated. The concepts at `/v2` guess one at
 promise, and an estimated "leave at 1:40" is how you miss a swim. So when
 routing is unavailable — no token, Mapbox down, or one pool it can find no
 road to — the dip keeps its window in the water, drops its departure time,
-and shows the straight-line distance instead, with a dashed edge and a
-banner. The reader can judge how long 2.3 km takes them; we won't pretend to.
+and shows the straight-line distance instead, on a hatched ground. That is
+the whole of it: the hatch and the distance standing where a departure would
+be say it twice over, and the sentence that used to sit above the planner
+explaining the fallback was a note about how the page was feeling rather than
+about the swim. The reader can judge how long 2.3 km takes them; we won't
+pretend to.
 `APPEAL.DISTANCE.BASE` is 0 against the routed modes' 40–160, so every
 distance-only dip ranks below every routed one — prefer what we can vouch for.
 
@@ -192,25 +205,39 @@ Concept 02 — but turned through ninety degrees in what it is about. The
 concept put one column per pool and asked you to compare fourteen; this has
 one column, the rest of your day, with the dips arranged down it — distance
 down the page *is* time. The scale is computed from the height available
-rather than fixed, and the axis starts at now, so the whole offer fits one
-screen: the morning you slept through is not an option you can take, and the
-question ("when could I go?") is about the shape of the day, which you cannot
-see a screenful at a time. Each dip carries its
-trip immediately above it — a hairline from departure to water, ticked at the
-departure end and labelled there with a mode icon — which is the thing a wall
-calendar can never tell you, and the reason a dip is an appointment rather
-than an opening time. The line runs on down the side of the block, so the
-journey and the swim read as one appointment; only the part above the block
-is the travel time.
+rather than fixed, and the axis starts at now: the morning you slept through
+is not an option you can take, and the question ("when could I go?") is about
+the shape of the day, which you cannot see a screenful at a time. Each dip
+carries its trip immediately above it — a hairline from departure to water,
+cornered by a tick at the departure end with a mode icon tucked under it —
+which is the thing a wall calendar can never tell you, and the reason a dip is
+an appointment rather than an opening time. The line's length is the travel
+time and nothing else, and it ends on its own block's top corner, which is
+where the water starts.
+
+Fitting one screen is worth a great deal, but not the block's own legibility,
+and between the two there used to be a middle the page fell through: a scale
+that fit the day on the screen and left every block too short to hold what it
+was trying to say. So a day that is *nearly* there gets the scale it needs and
+a short scroll; a day that is nowhere near stops asking and sets one line per
+dip instead. The heights those two levels need are measured off the type they
+are set in, declared in the stylesheet beside it, and asked about with
+container queries — so a block is never given a level it hasn't the room for,
+and the thresholds cannot drift away from the type the way a pixel count in a
+script does.
 
 Two dips clash, and go side by side, when they clash *in the water*. A later
 dip whose trip line would run through an earlier block is not a clash — the
 column is the page's scarcest currency and that would spend it on a collision
-the reader never sees — so the two stack full width and the later line runs
-down the far side of the column instead, the block it passes stepping in by a
-gutter to let it through. The layout arithmetic (`src/lib/dips/layout.js`) is
-separate from the component and unit-tested, including the calendar-style
-packing for the uncommon overlapping case.
+the reader never sees — so the two stack full width and the later line simply
+passes in front, on a plate of paper four pixels proud of it. That white space
+is what makes it read as a line crossing that block rather than a line drawn
+on it, which is the difference between the trip belonging to the dip below and
+appearing to belong to the block above. The layout arithmetic
+(`src/lib/dips/layout.js`) is separate from the component and unit-tested,
+including the calendar-style packing for the uncommon overlapping case; the
+geometry that follows from it is done in CSS, against custom properties
+carrying each dip's own minutes.
 
 At the foot of the axis the planner says whether the day is actually done —
 "no more lane swims today", or how many are left that we couldn't get you to

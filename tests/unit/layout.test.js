@@ -40,38 +40,25 @@ describe('layoutDips', () => {
 	// Two dips that share no water but whose trip lines cross each other's
 	// blocks used to be split into two half-width columns — the page paying
 	// for a clash the reader cannot see, in the one currency it is short of.
-	// They stack instead, and the later dip's line goes down the other side
-	// of the column, clearing the block it would have run through.
+	// They stack, full width, and the channel each column reserves down its
+	// left-hand edge is what keeps the later line off the earlier block.
 	it('stacks two dips whose only clash is the later one’s trip', () => {
 		const laid = layoutDips([dip(600, 645), dip(660, 705, { leaveBy: 640 })]);
 		expect(laid.map((l) => [l.lane, l.lanes])).toEqual([
 			[0, 1],
 			[0, 1]
 		]);
-		expect(laid[1].tripSide).toBe('right');
-		// …and the block it passes gives up the width for it to pass in.
-		expect(laid[0].gutter).toBe(true);
 	});
 
-	it('keeps the trip on the near side when it crosses nothing', () => {
-		const laid = layoutDips([dip(600, 645), dip(660, 705, { leaveBy: 650 })]);
-		expect(laid.map((l) => l.tripSide)).toEqual(['left', 'left']);
-		expect(laid.some((l) => l.gutter)).toBe(false);
-	});
-
-	// A block in the *other* column is not in the way: the two lines never
-	// share an x, so flipping would buy nothing and cost the gutter.
-	it('ignores a block the trip line passes beside rather than through', () => {
+	// Where the line goes is no longer a question the layout answers: there is
+	// one channel per column and every block is drawn to the right of it, so
+	// nothing flips sides and no block gives up width to let a line past.
+	it('leaves the trip line nothing to decide', () => {
 		const laid = layoutDips([dip(600, 660), dip(630, 690), dip(675, 720, { leaveBy: 665 })]);
-		// The last dip is back in the left column, and the only block in the
-		// water while its trip runs is in the right one.
-		expect(laid[2].tripSide).toBe('left');
-		// The middle one is the case that decides what "in the way" means: its
-		// near edge *is* the first block's right edge, so a line down it would
-		// run along that block rather than beside it. It goes to the far side,
-		// where it has its own column's edge to itself and costs no gutter.
-		expect(laid[1].tripSide).toBe('right');
-		expect(laid.some((l) => l.gutter)).toBe(false);
+		for (const entry of laid) {
+			expect(entry.tripSide).toBeUndefined();
+			expect(entry.gutter).toBeUndefined();
+		}
 	});
 
 	// A dip we couldn't route has no departure time and so draws no trip line

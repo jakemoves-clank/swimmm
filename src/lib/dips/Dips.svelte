@@ -98,8 +98,11 @@
 				})
 			: null
 	);
-	// True when the offer on screen is distances rather than routed trips.
-	const degraded = $derived(!!plan?.dips.length && plan.dips.every((d) => !d.routed));
+	// A dip we couldn't route says so in its own two ways — the hatched ground
+	// and "1.9 km away" where a departure would be — so the page says nothing
+	// on top of that. It used to carry a sentence explaining the fallback,
+	// which is a note about how the page is feeling rather than about the swim,
+	// and it is the reader who is short of screen, not us.
 	const offer = $derived(plan?.dips ?? null);
 	const whichDay = $derived(plan && now ? dayLabel(plan.date, now.date) : '');
 
@@ -129,9 +132,16 @@
 	// "that was the last swim today" and "that was the last one I picked" in
 	// exactly the same silence, and the reader has no way to tell whether
 	// waiting until seven would help. So: say the day is done when it is, say
-	// what is left when we couldn't get you to any of it — and say nothing at
-	// all when there is more water we could have offered, because then the
-	// silence is honest.
+	// that distance is what stopped us when it did — and say nothing at all
+	// when there is more water we could have offered, because then the silence
+	// is honest.
+	//
+	// The second line counted the sessions it was leaving out ("6 more leisure
+	// swims today, none we could get you to in time"), which answered a
+	// question about our reach with a number about the city's programme: six
+	// is not something the reader can act on, and it invites them to go
+	// hunting for six swims that are all an hour away. What they can act on is
+	// the reason, so the reason is all it says now.
 	const closing = $derived.by(() => {
 		if (!plan?.dips.length) return '';
 		const tail = dayTail(
@@ -149,7 +159,7 @@
 		const when = plan.isToday ? 'today' : whichDay;
 		if (tail.sessions === 0) return `no more ${noun}s ${when}`;
 		if (tail.offerable === 0) {
-			return `${tail.sessions} more ${noun}${tail.sessions === 1 ? '' : 's'} ${when}, none we could get you to in time`;
+			return "some options not shown because they're very far away";
 		}
 		return '';
 	});
@@ -373,12 +383,6 @@
 			<a href={CITY_SWIM_URLS[kind]}>city's {SWIM_KIND_NOUNS[kind]} schedules</a>.
 		</p>
 	{:else}
-		{#if degraded}
-			<p class="note">
-				We couldn't work out journey times just now, so these are straight-line distances — how
-				long they take is your call.
-			</p>
-		{/if}
 		{#if !plan.isToday}
 			<p class="note">
 				Nothing left {plan.daysAhead === 1 ? 'today' : 'between now and then'}, so this is

@@ -392,7 +392,9 @@ describe('buildDips, without routing', () => {
 });
 
 describe('a dip at a pool placed by its parent', () => {
-	it('carries the approximation, so the page can admit to it', () => {
+	// Nothing renders it any more — see README — but a borrowed point must not
+	// arrive at the offer recorded as an exact one.
+	it('carries the approximation rather than losing it', () => {
 		const borrowed = { ...POOL, approx: true };
 		const d = buildDip(session(), borrowed, { routed: true, mode: 'walk', minutes: 20 }, { nowMin: NOW });
 		expect(d.location.approx).toBe(true);
