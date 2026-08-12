@@ -19,17 +19,20 @@
 // never sees, and it happened constantly, because most dips are twenty
 // minutes' travel from most other dips.
 //
-// So the two stack, full width, and the later trip line goes down the *other*
-// side of the column instead: see tripSide below.
+// So the two stack, full width, and the later trip line stays on its own
+// block's leading edge — where a line from a departure to a swim belongs, and
+// the only place it can be read as belonging to that dip at all. The line used
+// to flip to the far edge of the column instead, which put a tick and a mode
+// icon in the middle of the page attached to a line running down the inside of
+// somebody else's block: no collision, and no way to tell whose trip it was.
+//
+// Where a line does have an earlier block to get past, it simply passes in
+// front of it — so this file has nothing left to say about it. It is a
+// hairline and a 5px tick, running inside that block's own left margin, and
+// the one thing that used to need room out there, the mode icon, is now set
+// in its own block's trip line instead.
 function water(dip) {
 	return { start_min: dip.start_min, end_min: dip.end_min };
-}
-
-// The stretch of page a trip line claims. Null for a dip we couldn't route:
-// no departure, no line, nothing claimed before the water.
-function trip(dip) {
-	if (dip.leaveBy == null || dip.leaveBy >= dip.start_min) return null;
-	return { start_min: dip.leaveBy, end_min: dip.start_min };
 }
 
 function overlaps(a, b) {
@@ -37,11 +40,9 @@ function overlaps(a, b) {
 }
 
 /**
- * @returns [{ dip, lane, lanes, tripSide, gutter }] in the order the day runs
- * — `lane` is which sub-column to draw in, `lanes` how many the group needs
- * (so a dip with no clash gets the full width); `tripSide` which edge of that
- * column the trip line runs down, and `gutter` whether this block gives up a
- * sliver of its right-hand width to let someone else's line past.
+ * @returns [{ dip, lane, lanes }] in the order the day runs — `lane` is which
+ * sub-column to draw in, `lanes` how many the group needs (so a dip with no
+ * clash gets the full width).
  */
 export function layoutDips(dips) {
 	const ordered = [...dips].sort((a, b) => a.start_min - b.start_min || a.end_min - b.end_min);
@@ -67,41 +68,12 @@ export function layoutDips(dips) {
 		let lane = 0;
 		while (group.some((g) => g.lane === lane && overlaps(water(g.dip), wet))) lane++;
 
-		const entry = { dip, lane, lanes: 1, tripSide: 'left', gutter: false };
+		const entry = { dip, lane, lanes: 1 };
 		group.push(entry);
 		laid.push(entry);
 		groupEnd = Math.max(groupEnd, wet.end_min);
 	}
 	closeGroup();
-
-	// Now the lines. A trip drawn down the near edge of a column runs straight
-	// through any earlier block that edge passes — the very thing stacking
-	// them was supposed to avoid — so it goes down the far edge instead, and
-	// whatever that edge passes steps in by a gutter's width to let it
-	// through. Both edges belong to the same column, so this changes nothing
-	// about when anything happens: the line still runs from departure to
-	// water, at the length its travel time earns.
-	//
-	// "In the way" is a question about x, not about lanes: a full-width block
-	// and the left half of a two-lane group share an edge, so a line down that
-	// edge crosses both.
-	const span = (e) => [e.lane / e.lanes, (e.lane + 1) / e.lanes];
-	const crossed = (entry, x, line) =>
-		laid.filter((other) => {
-			if (other === entry || !overlaps(water(other.dip), line)) return false;
-			const [from, to] = span(other);
-			return x >= from && x <= to;
-		});
-
-	for (const entry of laid) {
-		const line = trip(entry.dip);
-		if (!line) continue;
-		const [near, far] = span(entry);
-		if (!crossed(entry, near, line).length) continue;
-
-		entry.tripSide = 'right';
-		for (const other of crossed(entry, far, line)) other.gutter = true;
-	}
 
 	return laid;
 }
