@@ -128,7 +128,9 @@ test('degrades to distances, saying so, when it cannot route a trip', async ({ p
 	await expect(dip).toContainText('2–2:45pm');
 	await expect(dip).toContainText('km away');
 	await expect(dip).not.toContainText('leave');
-	await expect(page.getByText(/straight-line distances/)).toBeVisible();
+	// The block says it two ways already — the hatched ground and the distance
+	// standing where a departure would be — so the page adds no prose about it.
+	await expect(page.getByText(/straight-line distances/)).toHaveCount(0);
 });
 
 // The planner's whole claim is that distance down the page is time. If that

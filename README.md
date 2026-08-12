@@ -162,8 +162,12 @@ A travel *time* is never estimated. The concepts at `/v2` guess one at
 promise, and an estimated "leave at 1:40" is how you miss a swim. So when
 routing is unavailable — no token, Mapbox down, or one pool it can find no
 road to — the dip keeps its window in the water, drops its departure time,
-and shows the straight-line distance instead, with a dashed edge and a
-banner. The reader can judge how long 2.3 km takes them; we won't pretend to.
+and shows the straight-line distance instead, on a hatched ground. That is
+the whole of it: the hatch and the distance standing where a departure would
+be say it twice over, and the sentence that used to sit above the planner
+explaining the fallback was a note about how the page was feeling rather than
+about the swim. The reader can judge how long 2.3 km takes them; we won't
+pretend to.
 `APPEAL.DISTANCE.BASE` is 0 against the routed modes' 40–160, so every
 distance-only dip ranks below every routed one — prefer what we can vouch for.
 

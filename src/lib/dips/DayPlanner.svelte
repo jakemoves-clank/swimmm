@@ -357,6 +357,10 @@
 		--full-px: 64px;
 		/* Between two dips drawn side by side. */
 		--lane-gap: 0.4rem;
+		/* The shortest a trip line is ever drawn: the halo, the icon tucked
+		   under the tick, and the pixel and a half between them. Whatever the
+		   travel time, the corner always has room for the mode. */
+		--trip-min: 14px;
 		/* The axis gutter. Times are right-aligned into it so the hour column
 		   and the block column each have one edge. */
 		padding-left: 2.1rem;
@@ -456,9 +460,21 @@
 	   the block's own trip line, where whose trip it is was never in question.
 	   Above the blocks, so the passing run is not lost under a pale ground. */
 	.trip-rule {
-		/* Clamped to the axis: a departure already behind you is drawn from
-		   now, which is where the block says to leave. */
-		--trip: calc((var(--start) - max(var(--leave), var(--span0))) * var(--scale));
+		/* Clamped to the axis — a departure already behind you is drawn from
+		   now, which is where the block says to leave — and then floored at the
+		   length that holds an icon.
+		   The floor is the one place on this page where a length is not its
+		   quantity, and it is deliberate: below about ten minutes the line is a
+		   few pixels either way, a difference no reader can measure off the
+		   page, while the icon on it is the difference between knowing you are
+		   walking and not. A mode that appears on some dips and not others
+		   reads as a fault in the page rather than a fact about the trip, and
+		   that costs more than the pixels do. The words in the block carry the
+		   real figure. */
+		--trip: max(
+			calc((var(--start) - max(var(--leave), var(--span0))) * var(--scale)),
+			var(--trip-min)
+		);
 		--halo: 4px;
 		position: absolute;
 		/* One shape for the whole trip — the line, its tick and its icon on a
@@ -479,7 +495,6 @@
 		height: calc(var(--trip) + var(--halo));
 		background: var(--paper);
 		z-index: 2;
-		container-type: size;
 	}
 	/* The rule itself, from the departure down to the water. */
 	.trip-rule::before {

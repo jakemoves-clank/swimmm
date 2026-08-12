@@ -98,8 +98,11 @@
 				})
 			: null
 	);
-	// True when the offer on screen is distances rather than routed trips.
-	const degraded = $derived(!!plan?.dips.length && plan.dips.every((d) => !d.routed));
+	// A dip we couldn't route says so in its own two ways — the hatched ground
+	// and "1.9 km away" where a departure would be — so the page says nothing
+	// on top of that. It used to carry a sentence explaining the fallback,
+	// which is a note about how the page is feeling rather than about the swim,
+	// and it is the reader who is short of screen, not us.
 	const offer = $derived(plan?.dips ?? null);
 	const whichDay = $derived(plan && now ? dayLabel(plan.date, now.date) : '');
 
@@ -373,12 +376,6 @@
 			<a href={CITY_SWIM_URLS[kind]}>city's {SWIM_KIND_NOUNS[kind]} schedules</a>.
 		</p>
 	{:else}
-		{#if degraded}
-			<p class="note">
-				We couldn't work out journey times just now, so these are straight-line distances — how
-				long they take is your call.
-			</p>
-		{/if}
 		{#if !plan.isToday}
 			<p class="note">
 				Nothing left {plan.daysAhead === 1 ? 'today' : 'between now and then'}, so this is
