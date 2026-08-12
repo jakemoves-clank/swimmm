@@ -9,7 +9,8 @@
 import { readFileSync, writeFileSync, mkdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { EnvHttpProxyAgent, fetch as undiciFetch } from 'undici';
-import { buildSchedule } from './transform.js';
+import { buildSchedule, trimSchedule } from './transform.js';
+import { torontoNow } from '../time.js';
 
 const CKAN = 'https://ckan0.cf.opendata.inter.prod-toronto.ca';
 export const URLS = {
@@ -106,10 +107,12 @@ export async function loadSchedule({
 		fetchImpl
 	);
 
+	// Trimmed to the window the page can actually use — see trimSchedule. The
+	// city's six weeks are its business; what ships in the HTML is ours.
 	return {
 		programs_last_refreshed: String(programsMeta.result.last_refreshed),
 		facilities_last_refreshed: String(facilitiesMeta.result.last_refreshed),
 		generated_at: new Date().toISOString(),
-		...buildSchedule(dropin, locations, geojson)
+		...trimSchedule(buildSchedule(dropin, locations, geojson), { today: torontoNow().date })
 	};
 }

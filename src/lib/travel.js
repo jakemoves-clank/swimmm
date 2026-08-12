@@ -34,23 +34,32 @@ export function matrixUrl(profile, origin, pools, token) {
 	return `https://api.mapbox.com/directions-matrix/v1/mapbox/${profile}/${coords}?${query}`;
 }
 
-async function profileDurations(profile, origin, pools, token, fetchImpl) {
-	const out = new Map(); // pool id -> minutes | null
-	for (const chunk of chunkPools(pools)) {
-		const res = await fetchImpl(matrixUrl(profile, origin, chunk, token));
-		if (!res.ok) throw new Error(`Mapbox ${profile} matrix -> ${res.status}`);
-		const body = await res.json();
-		if (body.code !== 'Ok') throw new Error(`Mapbox ${profile} matrix -> ${body.code}`);
-		const durations = body.durations?.[0]; // from origin; index 0 is origin itself
-		if (!Array.isArray(durations)) {
-			throw new Error(`Mapbox ${profile} matrix -> missing durations in response`);
-		}
-		chunk.forEach((pool, i) => {
-			const sec = durations[i + 1];
-			out.set(pool.id, sec == null ? null : Math.round(sec / 60));
-		});
+async function chunkDurations(profile, origin, chunk, token, fetchImpl) {
+	const res = await fetchImpl(matrixUrl(profile, origin, chunk, token));
+	if (!res.ok) throw new Error(`Mapbox ${profile} matrix -> ${res.status}`);
+	const body = await res.json();
+	if (body.code !== 'Ok') throw new Error(`Mapbox ${profile} matrix -> ${body.code}`);
+	const durations = body.durations?.[0]; // from origin; index 0 is origin itself
+	if (!Array.isArray(durations)) {
+		throw new Error(`Mapbox ${profile} matrix -> missing durations in response`);
 	}
-	return out;
+	return chunk.map((pool, i) => {
+		const sec = durations[i + 1];
+		return [pool.id, sec == null ? null : Math.round(sec / 60)];
+	});
+}
+
+// All of a profile's chunks at once. The city has 104 pools, which is five
+// chunks of 24, and these used to go out one after another — five round trips
+// deep, per mode, with the page showing nothing at all until the last of them
+// landed. They are independent requests to the same endpoint: there was never
+// a reason for the second to wait on the first, and on a phone on mobile data
+// that queue was most of the wait before any dip appeared.
+async function profileDurations(profile, origin, pools, token, fetchImpl) {
+	const chunks = await Promise.all(
+		chunkPools(pools).map((chunk) => chunkDurations(profile, origin, chunk, token, fetchImpl))
+	);
+	return new Map(chunks.flat()); // pool id -> minutes | null
 }
 
 /**

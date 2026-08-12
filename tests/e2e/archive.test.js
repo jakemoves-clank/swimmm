@@ -38,9 +38,29 @@ function watchForErrors(page) {
 	return errors;
 }
 
+// A prerendered page is on the screen long before it is alive. Both snapshots
+// ship a loading line in their HTML and swap it for the real thing once the
+// client code runs, and until then the buttons have no handlers attached.
+//
+// /v1's loading line is a `<p class="status">`, which is also one of the three
+// things its `drew` locator accepts — so "it drew" was satisfied by the shell,
+// and the test went on to click a dead button and wait five seconds for a
+// state change that was never coming. It failed about one run in three under
+// the full parallel suite, on a machine busy enough to make hydration late,
+// and passed every time on its own. Hence: wait for the page to come up.
+//
+// Waiting on a snapshot's own loading copy would be a brittle thing to do to
+// a live route. It is safe here for the reason this whole file exists: an
+// archive's markup cannot change.
+async function open(page, archive, url = archive.path) {
+	await page.goto(url);
+	await expect(page.getByText(archive.loading)).toHaveCount(0);
+}
+
 const ARCHIVES = [
 	{
 		path: '/v1',
+		loading: /Loading today/,
 		// The root page resolves to a list, an empty-state line, or the dry pool.
 		// Any of the three is a page that worked; none of them is a blank shell.
 		drew: (page) => page.locator('.card, .status, .dry-pool-box').first(),
@@ -65,6 +85,7 @@ const ARCHIVES = [
 	},
 	{
 		path: '/v2',
+		loading: /Reading today/,
 		drew: (page) => page.locator('#stage figure').first(),
 		// The gallery's control is its nav: a second concept has to be reachable
 		// and has to change what is on the stage.
@@ -91,7 +112,7 @@ for (const archive of ARCHIVES) {
 
 	test(`${path} still renders`, async ({ page }) => {
 		const errors = watchForErrors(page);
-		await page.goto(path);
+		await open(page, archive);
 
 		await expect(page.locator('main')).toBeVisible();
 		// Titled with something, whatever the snapshot's era called itself.
@@ -108,7 +129,7 @@ for (const archive of ARCHIVES) {
 
 	test(`${path} is still explorable`, async ({ page }) => {
 		const errors = watchForErrors(page);
-		await page.goto(path);
+		await open(page, archive);
 		await expect(archive.drew(page)).toBeVisible();
 
 		await archive.explore(page);
@@ -121,14 +142,14 @@ for (const archive of ARCHIVES) {
 	test(`${path} still honours its deep links, and survives a bad one`, async ({ page }) => {
 		const errors = watchForErrors(page);
 
-		await page.goto(archive.deepLink);
+		await open(page, archive, archive.deepLink);
 		await archive.landed(page);
 		await expect(archive.drew(page)).toBeVisible();
 
 		// A stale link from the snapshot's era should degrade to the default view,
 		// never to an empty page — an archive nobody maintains will be linked to
 		// with parameters nobody remembers.
-		await page.goto(archive.nonsense);
+		await open(page, archive, archive.nonsense);
 		await expect(page.locator('main')).toBeVisible();
 		await expect(archive.drew(page)).toBeVisible();
 
