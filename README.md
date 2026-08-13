@@ -143,6 +143,10 @@ under `src/routes/v3/` would import `$lib` and fail the archive seal.
 > Maintain the current colour palette unless you see gaps, and don't add a type
 > stack yet.
 
+"Sometimes scrolling might be better" is the sentence the planner's two-level
+scale answers, and "avoid adding more textual notes" is why the straight-line
+banner and the `≈` marker were removed rather than explained.
+
 ## Routes
 
 | Route | What |
