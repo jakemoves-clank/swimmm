@@ -4,8 +4,8 @@ One-screen mobile site answering: **when could I go for a swim?**
 
 ## How it was asked for
 
-Each version came out of one prompt to Claude Code. Quoted verbatim, wrapped to
-this file's width and otherwise unedited.
+Each version started with a prompt to Claude Code — Fable 5 for v1, Opus 5
+since. Quoted verbatim, wrapped to this file's width and otherwise unedited.
 
 ### v1 — proof of concept ([#1](https://github.com/jakemoves-clank/swimmm/pull/1))
 
