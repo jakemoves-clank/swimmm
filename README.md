@@ -13,11 +13,8 @@ no map, no runtime backend; grayscale UI with one accent color.
 
 ## How it was asked for
 
-Swimmm was built in a handful of Claude Code sessions, each opened with one
-prompt. They are quoted below in full: the brief is the part of this repo that
-isn't in the diff, and it is the fastest way to see how much of what shipped was
-asked for rather than decided along the way. Verbatim — wrapped to this file's
-width, otherwise unedited. Shorter steering along the way is left out.
+Each version came out of one prompt to Claude Code. Quoted verbatim, wrapped to
+this file's width and otherwise unedited.
 
 ### v1 — the finder ([#1](https://github.com/jakemoves-clank/swimmm/pull/1))
 
@@ -55,12 +52,7 @@ width, otherwise unedited. Shorter steering along the way is left out.
 >
 > Any questions?
 
-The SQLite backend is gone — the site went fully static a few hours later, city
-data baked in at build time — but the politeness contract with the city, the
-grayscale-plus-one-accent rule and the radioactive-waste standard for location
-all survive in the version you see now.
-
-### v2 — eleven concepts ([#11](https://github.com/jakemoves-clank/swimmm/pull/11))
+### v2 — eleven concepts, built at `/concepts` ([#11](https://github.com/jakemoves-clank/swimmm/pull/11))
 
 > You are an information designer! A really good one. You like Edward Tufte's
 > books and information visualizations.
@@ -83,9 +75,6 @@ all survive in the version you see now.
 > different visual styles and colourways. Make sure each concept lets a user
 > answer their core question. Present your eleven concepts in a PR on a new path,
 > with a discreet nav element to switch between them for comparison.
-
-Built at `/concepts`, since archived to [`/v2`](#design-studies--v2). The "maybe
-I have kids" clause is where the lane/leisure toggle comes from.
 
 ### v3 — the concierge ([#16](https://github.com/jakemoves-clank/swimmm/pull/16))
 
@@ -129,10 +118,8 @@ I have kids" clause is where the lane/leisure toggle comes from.
 > what are my options for a swim"), but the interface should be able to
 > accommodate it if that's the result of the appeal algorithm.
 
-One instruction here was declined rather than followed: v3 was asked for at `/`
-*and* `/v3`, and lives at `/` alone. A live route under `src/routes/v3/` would
-import `$lib` and so fail the archive seal — `/vN` is for snapshots cut when a
-version is superseded, and the live version isn't one yet.
+v3 was asked for at `/` and `/v3`; it lives at `/` alone, because a live route
+under `src/routes/v3/` would import `$lib` and fail the archive seal.
 
 #### The design review that followed ([#31](https://github.com/jakemoves-clank/swimmm/pull/31))
 
@@ -155,10 +142,6 @@ version is superseded, and the live version isn't one yet.
 > Avoiding adding more verbosity or textual notes or instructions for the user.
 > Maintain the current colour palette unless you see gaps, and don't add a type
 > stack yet.
-
-"Sometimes scrolling might be better" is the sentence the planner's two-level
-scale answers, and "avoid adding more textual notes" is why the straight-line
-banner and the `≈` marker were removed rather than explained.
 
 ## Routes
 
