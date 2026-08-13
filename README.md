@@ -2,15 +2,6 @@
 
 One-screen mobile site answering: **when could I go for a swim?**
 
-Not a directory of pools — a handful of *dips*: concrete appointments with a
-departure time, a way of getting there, and a booked window in the water. The
-archived `/v1` answers the older question ("which pools have a swim today, and
-which are closest and soonest?") and shows the difference.
-
-Proof of concept. SvelteKit (Svelte 5), fully static — city data is fetched at
-build time and baked into the prerendered page (~30 KB gzipped). No accounts,
-no map, no runtime backend; grayscale UI with one accent color.
-
 ## How it was asked for
 
 Each version came out of one prompt to Claude Code. Quoted verbatim, wrapped to
