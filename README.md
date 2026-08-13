@@ -7,7 +7,7 @@ One-screen mobile site answering: **when could I go for a swim?**
 Each version came out of one prompt to Claude Code. Quoted verbatim, wrapped to
 this file's width and otherwise unedited.
 
-### v1 — the finder ([#1](https://github.com/jakemoves-clank/swimmm/pull/1))
+### v1 — proof of concept ([#1](https://github.com/jakemoves-clank/swimmm/pull/1))
 
 > Make a one-screen mobile website that solves the user story: "As someone in
 > Toronto, I want to know what city-owned swimming pools have lane swim today,
@@ -72,7 +72,7 @@ the radioactive-waste standard for location are still here.
 
 "Maybe I have kids" is where the lane/leisure toggle comes from.
 
-### v3 — the concierge ([#16](https://github.com/jakemoves-clank/swimmm/pull/16))
+### v3 — data model and UX ([#16](https://github.com/jakemoves-clank/swimmm/pull/16))
 
 > The previous versions (/v1, v2) got basic stuff working and explored some UX
 > concepts. Now we're going to make v3 (at the base route / and at /v3).
