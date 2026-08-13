@@ -40,6 +40,19 @@ So, concretely:
 `tests/unit/archive-routes.test.js` enforces all of this and will fail loudly.
 If you hit it, the fix is to stop, not to relax the test.
 
+### The one `vN` route that isn't a snapshot: `/v3`
+
+`src/routes/v3/+page.svelte` is a **signpost**: eight lines that redirect to
+`/`, which is v3. It exists so the version number answers rather than 404s, and
+it is not a place to build. Do not give it a copy of the live page, do not
+import `$lib` into it (that fails the seal), and do not delete it as redundant.
+
+When v3 is superseded, replace it with the snapshot cut from `/` — its own
+`src/routes/v3/lib/`, a frozen suite at `tests/e2e/v3/`, an entry in `ARCHIVES`
+— and drop the `/v3` line from `static/_redirects`. The guard decides which of
+the two a `vN` route is by what a snapshot leaves on disk (its own `lib/`, or a
+frozen spec), so the change of kind is enforced from the moment you make it.
+
 ### The deliberate exception: `$lib/server/**`
 
 The snapshots share the build-time data pipeline (`$lib/server/cityData.js`,

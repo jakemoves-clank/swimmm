@@ -118,9 +118,6 @@ this file's width and otherwise unedited.
 > what are my options for a swim"), but the interface should be able to
 > accommodate it if that's the result of the appeal algorithm.
 
-v3 was asked for at `/` and `/v3`; it lives at `/` alone, because a live route
-under `src/routes/v3/` would import `$lib` and fail the archive seal.
-
 #### The design review that followed ([#31](https://github.com/jakemoves-clank/swimmm/pull/31))
 
 > You are an information designer! A really good one. You like Edward Tufte's
@@ -154,6 +151,7 @@ banner and the `≈` marker were removed rather than explained.
 | `/` | the live site — the concierge, offering dips ([below](#dips)) |
 | `/v1` | archived snapshot: the main page as it stood |
 | `/v2` | archived snapshot: the design studies gallery (previously `/concepts`) |
+| `/v3` | signpost to `/`, which is v3 |
 | `/concepts` | signpost to `/v2`, carrying the query string with it |
 
 Keeping `/concepts` alive is the same commitment the `/vN` scheme makes: an
@@ -161,6 +159,16 @@ address that was published once keeps resolving. It redirects in the browser
 because GitHub Pages serves static files and can't issue a 301 (`static/_redirects`
 does it properly on Cloudflare), and it forwards `?c=`, `?at=` and `?kind=`
 rather than dumping deep links on the gallery's front page.
+
+`/v3` is the same idea pointed the other way. A version number should answer
+whether or not its version has been superseded, but v3 can be neither a
+snapshot (it is still moving) nor a second live route (a copy of `/` under
+`src/routes/v3/` imports `$lib`, and the seal below forbids it). So `/v3`
+redirects to `/`, carrying `?kind=` and `?dip=` with it, and on the day v3 is
+superseded that file is replaced by the snapshot cut from it — the address
+resolving throughout to the version it names. `tests/unit/archive-routes.test.js`
+tells the two apart by what a snapshot leaves on disk, its own `lib/` or a
+frozen spec, so neither can quietly turn into the other.
 
 The `/vN` routes are **archives, not branches**. Nothing new is built on them,
 and each is *sealed*: it owns its implementation under `src/routes/vN/lib/`
