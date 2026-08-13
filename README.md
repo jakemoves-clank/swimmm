@@ -52,6 +52,9 @@ this file's width and otherwise unedited.
 >
 > Any questions?
 
+The SQLite backend lasted hours; the politeness contract, the grayscale rule and
+the radioactive-waste standard for location are still here.
+
 ### v2 — eleven concepts, built at `/concepts` ([#11](https://github.com/jakemoves-clank/swimmm/pull/11))
 
 > You are an information designer! A really good one. You like Edward Tufte's
@@ -75,6 +78,8 @@ this file's width and otherwise unedited.
 > different visual styles and colourways. Make sure each concept lets a user
 > answer their core question. Present your eleven concepts in a PR on a new path,
 > with a discreet nav element to switch between them for comparison.
+
+"Maybe I have kids" is where the lane/leisure toggle comes from.
 
 ### v3 — the concierge ([#16](https://github.com/jakemoves-clank/swimmm/pull/16))
 
@@ -140,9 +145,9 @@ this file's width and otherwise unedited.
 > Maintain the current colour palette unless you see gaps, and don't add a type
 > stack yet.
 
-"Sometimes scrolling might be better" is the sentence the planner's two-level
-scale answers, and "avoid adding more textual notes" is why the straight-line
-banner and the `≈` marker were removed rather than explained.
+"Sometimes scrolling might be better" is what the planner's two-level scale
+answers; "no more textual notes" is why the straight-line banner and the `≈`
+marker were deleted rather than explained.
 
 ## Routes
 
