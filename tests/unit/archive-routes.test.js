@@ -33,14 +33,38 @@ const root = new URL('../../', import.meta.url);
 const read = (path) => readFileSync(new URL(path, root), 'utf8');
 const exists = (path) => existsSync(new URL(path, root));
 
-// Derived from disk, never hand-listed: a `/v3` added next year is sealed by
+// Derived from disk, never hand-listed: a `/v4` added next year is sealed by
 // these tests the day it appears, rather than the day someone remembers to
 // register it here.
-const snapshotNames = () =>
+const versionNames = () =>
 	readdirSync(new URL(`${ROUTES}/`, root))
 		.filter((entry) => /^v\d+$/.test(entry))
 		.filter((entry) => statSync(new URL(`${ROUTES}/${entry}`, root)).isDirectory())
 		.sort();
+
+// A `vN` directory is one of two things, and the difference decides which of
+// the rules below apply to it:
+//
+//   - a *snapshot* — the sealed copy of the site as it stood, owning its code
+//     under src/routes/vN/lib/ and described by a frozen suite in tests/e2e/vN/
+//   - a *signpost* — a redirect to `/`, for the version number that is still
+//     live. A real copy of the live route under a `vN/` path would import
+//     `$lib` and fail the seal the moment it existed, and freezing the version
+//     still being worked on would be a lie; answering with a redirect keeps the
+//     published address resolving to the thing it names either way.
+//
+// The day a live version is superseded, its signpost is replaced by the
+// snapshot cut from it, and the address never moves.
+//
+// Classification is by the evidence a snapshot leaves behind — its own lib/, or
+// its frozen spec — and never by "the directory looks small". That matters: it
+// is what stops either leak from hiding here. Delete a snapshot's lib/ and its
+// frozen spec still convicts it; delete the spec and its lib/ does. Retiring a
+// version means removing both, deliberately, which is the one case where a
+// snapshot is *meant* to become a signpost.
+const isSnapshot = (name) => exists(`${ROUTES}/${name}/lib`) || exists(`tests/e2e/${name}`);
+const snapshotNames = () => versionNames().filter(isSnapshot);
+const signpostNames = () => versionNames().filter((name) => !isSnapshot(name));
 
 function walk(dir) {
 	return readdirSync(new URL(`${dir}/`, root)).flatMap((entry) => {
@@ -128,4 +152,54 @@ describe('archived routes stay sealed', () => {
 		const reaching = importsOf(read(LIVE_ROUTE)).filter((spec) => /(^|\/)v\d+\//.test(spec));
 		expect(reaching, 'the live page imports from an archive').toEqual([]);
 	});
+});
+
+describe('a /vN signpost stays a signpost', () => {
+	// The failure this guards against is a signpost quietly growing into a
+	// route: someone renders a dip on it "since it's already there", and the
+	// version number now has two implementations that drift apart, neither of
+	// them sealed.
+	for (const name of signpostNames()) {
+		const dir = `${ROUTES}/${name}`;
+		const source = () => read(`${dir}/+page.svelte`);
+
+		it(`/${name} is a redirect and nothing else`, () => {
+			const files = walk(dir).map((path) => path.slice(dir.length + 1));
+			expect(files, `${dir} holds more than a signpost`).toEqual(['+page.svelte']);
+		});
+
+		it(`/${name} points at the live route`, () => {
+			expect(source()).toContain('location.replace');
+			// `${base}/` — the live root under whatever base path the build is
+			// served from, not another version and not a hard-coded absolute.
+			expect(source(), 'a signpost points at `/`, not at another version').toMatch(
+				/`\$\{base\}\/`/
+			);
+		});
+
+		it(`/${name} carries the query string across`, () => {
+			// Dropping it turns a link to one specific offer into a link to the
+			// front page, which looks like it worked.
+			expect(source()).toContain('location.search');
+		});
+
+		it(`/${name} imports no app code`, () => {
+			const foreign = importsOf(source()).filter(
+				(spec) => spec !== 'svelte' && !spec.startsWith('$app/')
+			);
+			expect(
+				foreign,
+				`a signpost that imports app code is a route, and a route at /${name} has to be sealed:\n${WHY_SEALED}`
+			).toEqual([]);
+		});
+
+		it(`/${name} redirects at the edge too`, () => {
+			// GitHub Pages can only redirect in the browser; Cloudflare does it
+			// properly, but only for paths listed here. Losing one silently costs
+			// the reader a round trip through a page that says nothing.
+			expect(read('static/_redirects'), `/${name} is missing from static/_redirects`).toMatch(
+				new RegExp(`^/${name}\\s`, 'm')
+			);
+		});
+	}
 });

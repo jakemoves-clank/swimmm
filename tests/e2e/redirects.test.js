@@ -38,6 +38,28 @@ test('/concepts keeps every parameter, not just the first', async ({ page }) => 
 	await expect(page).toHaveURL(/at=13%3A00|at=13:00/);
 });
 
+// `/v3` names the version that is currently live at `/`. It cannot be a copy
+// of the live route (that would import `$lib` and fail the archive seal) and
+// cannot be a snapshot (v3 is still moving), so it answers as a signpost — and
+// the day v3 is superseded, the same address becomes the sealed snapshot cut
+// from it. Either way the link resolves to the version it names.
+
+test('/v3 lands on the live site', async ({ page }) => {
+	await page.goto('/v3');
+
+	await expect(page).toHaveURL(/\/$/);
+	await expect(page.getByRole('button', { name: /use live location/ })).toBeVisible();
+});
+
+test('/v3 carries its parameters across', async ({ page }) => {
+	// A held link like /v3?kind=leisure&dip=30 describes a particular offer;
+	// arriving at the default one would look like it worked.
+	await page.goto('/v3?kind=leisure&dip=30');
+
+	await expect(page).toHaveURL(/kind=leisure/);
+	await expect(page).toHaveURL(/dip=30/);
+});
+
 test('the signpost leaves no trace in history', async ({ page }) => {
 	// Arrive from somewhere, so there is a real Back to press.
 	await page.goto('/');

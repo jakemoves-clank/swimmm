@@ -5,3 +5,8 @@
 # Cloudflare preserves the query string across a redirect, so deep links like
 # /concepts?c=almanac keep landing on the right concept.
 /concepts /v2 301
+
+# /v3 names the version that is currently live at /. It redirects rather than
+# 404ing, and becomes a sealed snapshot on the day v3 is superseded — at which
+# point this line goes and the address keeps resolving to the same thing.
+/v3 / 301
