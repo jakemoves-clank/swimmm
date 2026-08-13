@@ -11,6 +11,155 @@ Proof of concept. SvelteKit (Svelte 5), fully static — city data is fetched at
 build time and baked into the prerendered page (~30 KB gzipped). No accounts,
 no map, no runtime backend; grayscale UI with one accent color.
 
+## How it was asked for
+
+Swimmm was built in a handful of Claude Code sessions, each opened with one
+prompt. They are quoted below in full: the brief is the part of this repo that
+isn't in the diff, and it is the fastest way to see how much of what shipped was
+asked for rather than decided along the way. Verbatim — wrapped to this file's
+width, otherwise unedited. Shorter steering along the way is left out.
+
+### v1 — the finder ([#1](https://github.com/jakemoves-clank/swimmm/pull/1))
+
+> Make a one-screen mobile website that solves the user story: "As someone in
+> Toronto, I want to know what city-owned swimming pools have lane swim today,
+> and which are closest to me and soonest, so I can easily plan to go for a
+> swim."
+>
+> As source data, use only official City of Toronto data hosted by the city. You
+> may have to download and parse Excel documents or CSVs.
+>
+> Use Svelte. Keep the frontend very simple. Ensure the backend regularly updates
+> its data from the city (according to the city's schedule for updates — do NOT
+> spam API or download endpoints). Fetch data occasionally and store it in a
+> SQLite database.
+>
+> Test the backend as you build it, TDD red/green style. Write one end to end
+> test in Playwright covering the happy path (the user story above). Write other
+> tests when you need to for debugging, but this is a proof of concept and
+> doesn't need exhaustive unit testing.
+>
+> Do not build login or user accounts.
+>
+> Present results on a single screen. Only show adult lane swim times and pool
+> locations. Do not use a map view (yet).
+>
+> Request the user's location. Do not store location data server-side, do not
+> persist it, treat it and any user data (this is a simile coming up, and a joke)
+> like radioactive waste.
+>
+> Don't waste time on design or branding. Clean grayscale layout with one accent
+> color for interactivity. Use the working title "Swimmm" for the project.
+>
+> Do your best to this accomplish task within $75 in usage credits.
+>
+> Any questions?
+
+The SQLite backend is gone — the site went fully static a few hours later, city
+data baked in at build time — but the politeness contract with the city, the
+grayscale-plus-one-accent rule and the radioactive-waste standard for location
+all survive in the version you see now.
+
+### v2 — eleven concepts ([#11](https://github.com/jakemoves-clank/swimmm/pull/11))
+
+> You are an information designer! A really good one. You like Edward Tufte's
+> books and information visualizations.
+>
+> You've just been given this repo. Use d3 and its existing svelte integrations
+> to render eleven different ways to answer this user story visually:
+>
+> As someone in Toronto, I want to know what city-owned swimming pools have lane
+> swim today, and which are closest to me and soonest, so I can easily plan to go
+> for a swim. I might be looking for leisure swim instead, maybe I have kids.
+>
+> Refer to official d3 examples and the works of Edward Tufte for ideas. Be
+> creative and explore the user story. Use the information presented by the repo:
+> time, space, travel, energy. Consider common and uncommon ways already used to
+> visualize these things: clock faces, block schedules, radial vs Cartesian.
+> Railway timetables, good "parking allowed between" signs, chloropleth maps,
+> time-as-distance maps.
+>
+> Use zero, one, or two touch interactions in each concept. The concepts can use
+> different visual styles and colourways. Make sure each concept lets a user
+> answer their core question. Present your eleven concepts in a PR on a new path,
+> with a discreet nav element to switch between them for comparison.
+
+Built at `/concepts`, since archived to [`/v2`](#design-studies--v2). The "maybe
+I have kids" clause is where the lane/leisure toggle comes from.
+
+### v3 — the concierge ([#16](https://github.com/jakemoves-clank/swimmm/pull/16))
+
+> The previous versions (/v1, v2) got basic stuff working and explored some UX
+> concepts. Now we're going to make v3 (at the base route / and at /v3).
+>
+> Let's reorient the UX and add a new concept to the domain model / data model.
+> Instead of showing the user options for available swimming pools, let's
+> introduce the concept of a Dip.
+>
+> A Dip is composed of a location, a travel mode (walk / bike / transit / drive),
+> a one-way travel time, and a period of time in the water (start and end time,
+> and duration). We'll start with the option for the duration to be either 30,
+> 45, or 60 mins. Surface this as a constant like other user-settings-to-be in
+> the codebase. Add other fields to the model as necessary.
+>
+> The job of the site in v3 is to offer the user a handful of appealing Dips for
+> the current day, given their location. Because a Dip has a duration and travel
+> time, a user can consider like an appointment they're being offered, making the
+> site less of a directory and more of a concierge. A Dip is appealing if it's
+> within 15mins walk, 20mins bicycle, or 20mins driving of the user (surface
+> these as constants). Walking is more appealing than bicycling, bicycling is
+> more appealing than transit, and transit is more appealing than driving. Use
+> travel times from Mapbox or Transitous as appropriate, not estimates. (Make a
+> GH issue to include seasonal and weather considerations in the future, but do
+> not address them in this session). If the city data includes facilities
+> ratings, or pool sizes, that could be a secondary factor. Isolate the 'appeal'
+> algorithm and make it easy to tweak and expand in the future. A list of
+> appealing Dips should include all the data required to present them in
+> different ways; the concepts in /v2 include options inspired by day planners,
+> clock faces, and maps).
+>
+> First, update the base route with the new Dip model, so that the site presents
+> a handful of possible Dips using mostly existing presentation. ('dip' should
+> not be capitalized in user-facing language).
+>
+> Then, update the UX based on Concept 02 (the Day Planner). Instead of showing
+> pools side by side in columns, make the UX a single column with the top Dips
+> arranged on it. Ideally, Dips should not overlap much in time (the user would
+> like to be able to answer the question "if I have time between 2-4pm in my day,
+> what are my options for a swim"), but the interface should be able to
+> accommodate it if that's the result of the appeal algorithm.
+
+One instruction here was declined rather than followed: v3 was asked for at `/`
+*and* `/v3`, and lives at `/` alone. A live route under `src/routes/v3/` would
+import `$lib` and so fail the archive seal — `/vN` is for snapshots cut when a
+version is superseded, and the live version isn't one yet.
+
+#### The design review that followed ([#31](https://github.com/jakemoves-clank/swimmm/pull/31))
+
+> You are an information designer! A really good one. You like Edward Tufte's
+> books and information visualizations. You've just been handed this repo for a
+> design review. You're happy with the basics (day planner layout, simple
+> interaction flow).
+>
+> Explore the results presented from different areas in the city and for lane /
+> leisure mode. Take screenshots. Look for lack of polish and confusing UX. (Some
+> starting points, but this is a non-exhaustive list and I want you to do
+> exploratory testing: Dip blocks should be clearly legible in both layout and
+> type. For example, the travel-time indicator lines seem to have weird
+> interactions with each other, and text is often cut off. Walking icons
+> sometimes show and sometimes don't. There's an aim to show results on one page,
+> but this is in tension with dip blocks having enough space to display their
+> location and time details, so sometimes scrolling might be better.)
+>
+> In general, resolve layout and type issues, making decisions where necessary.
+> Avoiding adding more verbosity or textual notes or instructions for the user.
+> Maintain the current colour palette unless you see gaps, and don't add a type
+> stack yet.
+
+"Sometimes scrolling might be better" is the sentence the planner's two-level
+scale answers, and "avoid adding more textual notes" is why the straight-line
+banner and the `≈` marker were removed rather than explained.
+
 ## Routes
 
 | Route | What |
